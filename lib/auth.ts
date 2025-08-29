@@ -42,10 +42,10 @@ export async function validateCredentials(email: string, password: string): Prom
       program: user.program,
       semester: user.semester,
       cgpa: user.cgpa,
-      bio: user.bio,
-      phone: user.phone,
-      address: user.address,
-      avatar: user.avatar,
+      bio: user.bio || undefined,
+      phone: user.phone || undefined,
+      address: user.address || undefined,
+      avatar: user.avatar || undefined,
     };
   } catch (error) {
     console.error('Auth error:', error);
