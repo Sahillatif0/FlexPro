@@ -5,132 +5,130 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
-  id          String   @id @default(cuid())
-  email       String   @unique
-  password    String
-  firstName   String
-  lastName    String
-  studentId   String   @unique
-  role        String   @default("student")
-  program     String
-  semester    Int      @default(1)
-  cgpa        Float    @default(0.0)
-  bio         String?
-  phone       String?
-  address     String?
-  avatar      String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  studentId String   @unique
+  role      String   @default("student")
+  program   String
+  semester  Int      @default(1)
+  cgpa      Float    @default(0.0)
+  bio       String?
+  phone     String?
+  address   String?
+  avatar    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  enrollments      Enrollment[]
-  transcripts      Transcript[]
-  attendances      Attendance[]
-  notifications    Notification[]
-  feeInvoices      FeeInvoice[]
-  feePayments      FeePayment[]
-  feedbacks        Feedback[]
-  gradeRequests    GradeRequest[]
-  studyPlans       StudyPlan[]
+  enrollments   Enrollment[]
+  transcripts   Transcript[]
+  attendances   Attendance[]
+  notifications Notification[]
+  feeInvoices   FeeInvoice[]
+  feePayments   FeePayment[]
+  feedbacks     Feedback[]
+  gradeRequests GradeRequest[]
+  studyPlans    StudyPlan[]
 
   @@map("users")
 }
 
 model Course {
-  id            String   @id @default(cuid())
-  code          String   @unique
-  title         String
-  description   String?
-  creditHours   Int
-  prerequisite  String?
-  department    String
-  semester      Int
-  isActive      Boolean  @default(true)
-  maxCapacity   Int      @default(50)
-  instructor    String
-  schedule      String
-  room          String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  code         String   @unique
+  title        String
+  description  String?
+  creditHours  Int
+  prerequisite String?
+  department   String
+  semester     Int
+  isActive     Boolean  @default(true)
+  maxCapacity  Int      @default(50)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  enrollments   Enrollment[]
-  transcripts   Transcript[]
-  attendances   Attendance[]
-  feedbacks     Feedback[]
+  enrollments    Enrollment[]
+  transcripts    Transcript[]
+  attendances    Attendance[]
+  feedbacks      Feedback[]
   studyPlanItems StudyPlanItem[]
 
   @@map("courses")
 }
 
 model Enrollment {
-  id        String   @id @default(cuid())
-  userId    String
-  courseId  String
-  termId    String
-  status    String   @default("enrolled") // enrolled, dropped, completed
+  id         String   @id @default(cuid())
+  userId     String
+  courseId   String
+  termId     String
+  status     String   @default("enrolled") // enrolled, dropped, completed
   enrolledAt DateTime @default(now())
-  
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  course    Course   @relation(fields: [courseId], references: [id])
-  term      Term     @relation(fields: [termId], references: [id])
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id])
+  term   Term   @relation(fields: [termId], references: [id])
 
   @@unique([userId, courseId, termId])
   @@map("enrollments")
 }
 
 model Term {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  year        Int
-  season      String   // Fall, Spring, Summer
-  startDate   DateTime
-  endDate     DateTime
-  isActive    Boolean  @default(false)
-  
-  enrollments    Enrollment[]
-  transcripts    Transcript[]
-  attendances    Attendance[]
-  feeInvoices    FeeInvoice[]
-  gradeRequests  GradeRequest[]
-  feedbacks      Feedback[]
+  id        String   @id @default(cuid())
+  name      String   @unique
+  year      Int
+  season    String // Fall, Spring, Summer
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean  @default(false)
+
+  enrollments   Enrollment[]
+  transcripts   Transcript[]
+  attendances   Attendance[]
+  feeInvoices   FeeInvoice[]
+  gradeRequests GradeRequest[]
+  feedbacks     Feedback[]
 
   @@map("terms")
 }
 
 model Transcript {
-  id        String   @id @default(cuid())
-  userId    String
-  courseId  String
-  termId    String
-  grade     String
+  id          String   @id @default(cuid())
+  userId      String
+  courseId    String
+  termId      String
+  grade       String
   gradePoints Float
-  status    String   @default("final") // midterm, final
-  createdAt DateTime @default(now())
-  
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  course    Course   @relation(fields: [courseId], references: [id])
-  term      Term     @relation(fields: [termId], references: [id])
+  status      String   @default("final") // midterm, final
+  createdAt   DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id])
+  term   Term   @relation(fields: [termId], references: [id])
 
   @@unique([userId, courseId, termId, status])
   @@map("transcripts")
 }
 
 model Attendance {
-  id          String   @id @default(cuid())
-  userId      String
-  courseId    String
-  termId      String
-  date        DateTime
-  status      String   // present, absent, late
-  markedBy    String?
-  createdAt   DateTime @default(now())
-  
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  course      Course   @relation(fields: [courseId], references: [id])
-  term        Term     @relation(fields: [termId], references: [id])
+  id        String   @id @default(cuid())
+  userId    String
+  courseId  String
+  termId    String
+  date      DateTime
+  status    String // present, absent, late
+  markedBy  String?
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id])
+  term   Term   @relation(fields: [termId], references: [id])
 
   @@unique([userId, courseId, termId, date])
   @@map("attendances")
@@ -145,8 +143,8 @@ model Notification {
   isRead    Boolean  @default(false)
   isGlobal  Boolean  @default(false)
   createdAt DateTime @default(now())
-  
-  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notifications")
 }
@@ -160,62 +158,62 @@ model FeeInvoice {
   description String
   status      String   @default("pending") // pending, paid, overdue
   createdAt   DateTime @default(now())
-  
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  term        Term         @relation(fields: [termId], references: [id])
-  payments    FeePayment[]
+
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  term     Term         @relation(fields: [termId], references: [id])
+  payments FeePayment[]
 
   @@map("fee_invoices")
 }
 
 model FeePayment {
-  id          String   @id @default(cuid())
-  userId      String
-  invoiceId   String
-  amount      Float
-  method      String   // bank, online, cash
-  reference   String?
-  paidAt      DateTime @default(now())
-  
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  invoice     FeeInvoice @relation(fields: [invoiceId], references: [id])
+  id        String   @id @default(cuid())
+  userId    String
+  invoiceId String
+  amount    Float
+  method    String // bank, online, cash
+  reference String?
+  paidAt    DateTime @default(now())
+
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoice FeeInvoice @relation(fields: [invoiceId], references: [id])
 
   @@map("fee_payments")
 }
 
 model Feedback {
-  id        String   @id @default(cuid())
-  userId    String
-  courseId  String
-  termId    String
-  rating    Int      // 1-5 stars
-  comment   String?
-  isAnonymous Boolean @default(false)
+  id          String   @id @default(cuid())
+  userId      String
+  courseId    String
+  termId      String
+  rating      Int // 1-5 stars
+  comment     String?
+  isAnonymous Boolean  @default(false)
   submittedAt DateTime @default(now())
-  
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  course    Course   @relation(fields: [courseId], references: [id])
-  term      Term     @relation(fields: [termId], references: [id])
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id])
+  term   Term   @relation(fields: [termId], references: [id])
 
   @@unique([userId, courseId, termId])
   @@map("feedbacks")
 }
 
 model GradeRequest {
-  id          String   @id @default(cuid())
-  userId      String
-  termId      String
-  courseCode  String
-  currentGrade String
+  id             String    @id @default(cuid())
+  userId         String
+  termId         String
+  courseCode     String
+  currentGrade   String
   requestedGrade String
-  reason      String
-  status      String   @default("pending") // pending, approved, rejected
-  adminNotes  String?
-  submittedAt DateTime @default(now())
-  reviewedAt  DateTime?
-  
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  term        Term     @relation(fields: [termId], references: [id])
+  reason         String
+  status         String    @default("pending") // pending, approved, rejected
+  adminNotes     String?
+  submittedAt    DateTime  @default(now())
+  reviewedAt     DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  term Term @relation(fields: [termId], references: [id])
 
   @@map("grade_requests")
 }
@@ -227,23 +225,23 @@ model StudyPlan {
   isDefault Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items     StudyPlanItem[]
+
+  user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items StudyPlanItem[]
 
   @@map("study_plans")
 }
 
 model StudyPlanItem {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   studyPlanId String
   courseId    String
   semester    Int
   year        Int
-  order       Int      @default(0)
-  
-  studyPlan   StudyPlan @relation(fields: [studyPlanId], references: [id], onDelete: Cascade)
-  course      Course    @relation(fields: [courseId], references: [id])
+  order       Int    @default(0)
+
+  studyPlan StudyPlan @relation(fields: [studyPlanId], references: [id], onDelete: Cascade)
+  course    Course    @relation(fields: [courseId], references: [id])
 
   @@unique([studyPlanId, courseId])
   @@map("study_plan_items")

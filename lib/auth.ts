@@ -23,7 +23,7 @@ export async function validateCredentials(email: string, password: string): Prom
       where: { email },
     });
 
-    if (!user || !user.isActive) {
+    if (!user || !user.isActive || !user.password) {
       return null;
     }
 
