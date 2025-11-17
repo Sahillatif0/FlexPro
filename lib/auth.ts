@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 
 export interface User {
   id: string;
+  authUserId?: string; // Supabase auth.users.id linkage
   email: string;
   firstName: string;
   lastName: string;
@@ -27,13 +28,20 @@ export async function validateCredentials(email: string, password: string): Prom
       return null;
     }
 
-    const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) {
+    // If password is null (Supabase-managed user), skip local bcrypt validation.
+    if (user.password) {
+      const isValidPassword = await bcrypt.compare(password, user.password);
+      if (!isValidPassword) {
+        return null;
+      }
+    } else {
+      // No local password set; treat as invalid for legacy credential login.
       return null;
     }
 
     return {
-      id: user.id,
+  id: user.id,
+  authUserId: (user as any).authUserId || undefined,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,

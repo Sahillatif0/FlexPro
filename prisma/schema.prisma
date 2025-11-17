@@ -10,7 +10,8 @@ datasource db {
 model User {
   id          String   @id @default(cuid())
   email       String   @unique
-  password    String
+  // Local password now optional when using Supabase Auth. If you fully migrate, you can drop it later.
+  password    String?
   firstName   String
   lastName    String
   studentId   String   @unique
@@ -25,6 +26,9 @@ model User {
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  // Maps to Supabase auth.users.id (UUID). Nullable until user links account.
+  authUserId  String?  @unique
 
   enrollments      Enrollment[]
   transcripts      Transcript[]
@@ -50,9 +54,6 @@ model Course {
   semester      Int
   isActive      Boolean  @default(true)
   maxCapacity   Int      @default(50)
-  instructor    String
-  schedule      String
-  room          String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
