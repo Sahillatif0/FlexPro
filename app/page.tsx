@@ -7,41 +7,59 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAppStore } from '@/store';
 import { Eye, EyeOff } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { loginSchema } from '@/lib/validation/auth';
 
 export default function LoginPage() {
-  const [rollNumber, setRollNumber] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const { setUser } = useAppStore();
   const router = useRouter();
+  const { toast } = useToast();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setFormError(null);
 
-    // Mock authentication - replace with real auth
-    setTimeout(() => {
-      const mockUser = {
-        id: '1',
-        email: 'random@example.com',
-        firstName: 'Sahil',
-        lastName: 'Latif',
-        studentId: rollNumber,
-        role: 'student',
-        program: 'BS Computer Science',
-        semester: 6,
-        cgpa: 3.45,
-        bio: 'Passionate computer science student with interests in web development and AI.',
-        phone: '+92-300-1234567',
-        address: 'Karachi, Pakistan',
-        avatar: null,
-      };
+    const parsed = loginSchema.safeParse({ identifier, password });
+    if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
+      setFormError(fieldErrors.identifier?.[0] || fieldErrors.password?.[0] || 'Invalid input');
+      return;
+    }
 
-      setUser(mockUser);
+    try {
+      setLoading(true);
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(parsed.data),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setFormError(result?.message || 'Login failed');
+        return;
+      }
+
+      setUser(result.user);
+      toast({
+        title: 'Welcome back!',
+        description: `Signed in as ${result.user.firstName} ${result.user.lastName}`,
+      });
       router.push('/dashboard');
+    } catch (error) {
+      console.error('Login error', error);
+      setFormError('Unexpected error occurred. Please try again.');
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -58,17 +76,21 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
+            {formError ? (
+              <p className="rounded border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                {formError}
+              </p>
+            ) : null}
             <div className="space-y-2">
               <label htmlFor="text" className="text-sm font-medium text-gray-300">
                 Roll Number
               </label>
               <Input
-                id="rollNumber"
+                id="identifier"
                 type="text"
-                value={rollNumber}
-                onChange={(e) => setRollNumber(e.target.value)}
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 placeholder="23I-0763"
-                required
                 className="bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-blue-500"
               />
             </div>
@@ -83,7 +105,6 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
-                  required
                   className="bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-blue-500 pr-10"
                 />
                 <button
@@ -103,11 +124,6 @@ export default function LoginPage() {
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
-          <div className="mt-6 text-center">
-            <p className="text-xs text-gray-500">
-              Demo credentials: Any email/password combination
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>
