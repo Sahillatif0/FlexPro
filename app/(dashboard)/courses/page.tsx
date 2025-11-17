@@ -10,51 +10,47 @@ export default function CoursesPage() {
   // Mock data
   const courses = [
     {
-      id: '1',
-      code: 'CS-401',
-      title: 'Software Engineering',
-      instructor: 'Dr. Ahmed Ali',
+      id: '5',
+      code: 'CS-407',
+      title: 'Machine Learning',
       creditHours: 3,
-      schedule: 'MWF 09:00-10:00',
-      room: 'CS-Lab-1',
-      enrolled: 45,
-      capacity: 50,
+      prerequisite: 'CS-301, MT-205',
+      enrolled: 25,
+      capacity: 30,
+      department: 'Computer Science',
       status: 'enrolled'
     },
     {
-      id: '2',
-      code: 'CS-403',
-      title: 'Database Systems',
-      instructor: 'Prof. Sarah Khan',
+      id: '6',
+      code: 'CS-409',
+      title: 'Computer Graphics',
       creditHours: 4,
-      schedule: 'TTh 11:00-12:30',
-      room: 'LR-204',
-      enrolled: 38,
-      capacity: 40,
+      prerequisite: 'CS-205, MT-203',
+      enrolled: 20,
+      capacity: 25,
+      department: 'Computer Science',
       status: 'enrolled'
     },
     {
-      id: '3',
-      code: 'CS-405',
-      title: 'Computer Networks',
-      instructor: 'Dr. Hassan Shah',
+      id: '7',
+      code: 'MT-403',
+      title: 'Statistics',
       creditHours: 3,
-      schedule: 'MWF 14:00-15:00',
-      room: 'LR-301',
-      enrolled: 42,
-      capacity: 45,
+      prerequisite: 'MT-201',
+      enrolled: 30,
+      capacity: 30,
+      department: 'Mathematics',
       status: 'enrolled'
     },
     {
-      id: '4',
-      code: 'MT-401',
-      title: 'Calculus III',
-      instructor: 'Dr. Fatima Malik',
+      id: '8',
+      code: 'EE-401',
+      title: 'Digital Signal Processing',
       creditHours: 3,
-      schedule: 'TTh 08:00-09:30',
-      room: 'LR-105',
-      enrolled: 35,
-      capacity: 40,
+      prerequisite: 'EE-301',
+      enrolled: 18,
+      capacity: 25,
+      department: 'Electrical Engineering',
       status: 'enrolled'
     },
   ];
@@ -77,11 +73,6 @@ export default function CoursesPage() {
       sortable: true,
     },
     {
-      key: 'instructor',
-      title: 'Instructor',
-      sortable: true,
-    },
-    {
       key: 'creditHours',
       title: 'Credit Hours',
       render: (value: number) => (
@@ -90,21 +81,7 @@ export default function CoursesPage() {
         </Badge>
       ),
       sortable: true,
-    },
-    {
-      key: 'schedule',
-      title: 'Schedule',
-      render: (value: string) => (
-        <span className="text-sm text-gray-400">{value}</span>
-      ),
-    },
-    {
-      key: 'room',
-      title: 'Room',
-      render: (value: string) => (
-        <span className="text-sm text-gray-400">{value}</span>
-      ),
-    },
+    },            
     {
       key: 'capacity',
       title: 'Enrollment',

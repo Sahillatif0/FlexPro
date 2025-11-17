@@ -18,11 +18,8 @@ export default function EnrollPage() {
       id: '5',
       code: 'CS-407',
       title: 'Machine Learning',
-      instructor: 'Dr. Ali Raza',
       creditHours: 3,
       prerequisite: 'CS-301, MT-205',
-      schedule: 'TTh 10:00-11:30',
-      room: 'CS-Lab-2',
       enrolled: 25,
       capacity: 30,
       department: 'Computer Science',
@@ -32,11 +29,8 @@ export default function EnrollPage() {
       id: '6',
       code: 'CS-409',
       title: 'Computer Graphics',
-      instructor: 'Prof. Maria Ahmed',
       creditHours: 4,
       prerequisite: 'CS-205, MT-203',
-      schedule: 'MWF 13:00-14:30',
-      room: 'Graphics Lab',
       enrolled: 20,
       capacity: 25,
       department: 'Computer Science',
@@ -46,11 +40,8 @@ export default function EnrollPage() {
       id: '7',
       code: 'MT-403',
       title: 'Statistics',
-      instructor: 'Dr. Usman Khan',
       creditHours: 3,
       prerequisite: 'MT-201',
-      schedule: 'TTh 15:00-16:30',
-      room: 'LR-201',
       enrolled: 30,
       capacity: 30,
       department: 'Mathematics',
@@ -60,11 +51,8 @@ export default function EnrollPage() {
       id: '8',
       code: 'EE-401',
       title: 'Digital Signal Processing',
-      instructor: 'Dr. Sana Malik',
       creditHours: 3,
       prerequisite: 'EE-301',
-      schedule: 'MWF 11:00-12:00',
-      room: 'EE-Lab',
       enrolled: 18,
       capacity: 25,
       department: 'Electrical Engineering',
@@ -101,11 +89,6 @@ export default function EnrollPage() {
       sortable: true,
     },
     {
-      key: 'instructor',
-      title: 'Instructor',
-      sortable: true,
-    },
-    {
       key: 'creditHours',
       title: 'Credit Hours',
       render: (value: number) => (
@@ -114,13 +97,6 @@ export default function EnrollPage() {
         </Badge>
       ),
       sortable: true,
-    },
-    {
-      key: 'schedule',
-      title: 'Schedule',
-      render: (value: string) => (
-        <span className="text-sm text-gray-400">{value}</span>
-      ),
     },
     {
       key: 'capacity',
