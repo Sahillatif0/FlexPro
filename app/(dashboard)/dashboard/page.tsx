@@ -48,7 +48,7 @@ export default function DashboardPage() {
           Welcome back, {user.firstName}!
         </h1>
         <p className="text-gray-400">
-          Here's what's happening with your academic journey
+          Heres whats happening with your academic journey
         </p>
       </div>
 

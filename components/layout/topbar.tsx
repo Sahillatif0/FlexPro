@@ -4,6 +4,7 @@ import { Bell, Search, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAppStore } from '@/store';
+import { AuthMenu } from '@/components/auth/auth-menu';
 
 export function Topbar() {
   const { toggleSidebar, user } = useAppStore();
@@ -51,6 +52,8 @@ export function Topbar() {
             </div>
           </div>
         )}
+
+        <AuthMenu />
       </div>
     </header>
   );
