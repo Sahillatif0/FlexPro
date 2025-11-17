@@ -64,10 +64,7 @@ async function main() {
         creditHours: 3,
         prerequisite: 'CS-301',
         department: 'Computer Science',
-        semester: 6,
-        instructor: 'Dr. Ahmed Ali',
-        schedule: 'MWF 09:00-10:00',
-        room: 'CS-Lab-1',
+        semester: 6
       },
     }),
     prisma.course.upsert({
@@ -80,10 +77,7 @@ async function main() {
         creditHours: 4,
         prerequisite: 'CS-205',
         department: 'Computer Science',
-        semester: 6,
-        instructor: 'Prof. Sarah Khan',
-        schedule: 'TTh 11:00-12:30',
-        room: 'LR-204',
+        semester: 6
       },
     }),
     prisma.course.upsert({
@@ -96,10 +90,7 @@ async function main() {
         creditHours: 3,
         prerequisite: 'CS-203',
         department: 'Computer Science',
-        semester: 6,
-        instructor: 'Dr. Hassan Shah',
-        schedule: 'MWF 14:00-15:00',
-        room: 'LR-301',
+        semester: 6
       },
     }),
   ]);
