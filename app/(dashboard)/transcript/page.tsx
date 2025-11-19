@@ -52,6 +52,7 @@ export default function TranscriptPage() {
     const controller = new AbortController();
 
     async function loadTranscript() {
+      if(!user) return;
       setIsLoading(true);
       setError(null);
 

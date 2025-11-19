@@ -44,6 +44,7 @@ export default function FeesPage() {
     const controller = new AbortController();
 
     async function loadFees() {
+      if(!user) return;
       setIsLoading(true);
       setError(null);
 
