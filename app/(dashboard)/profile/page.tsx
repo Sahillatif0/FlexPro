@@ -32,6 +32,7 @@ export default function ProfilePage() {
     const controller = new AbortController();
 
     async function loadProfile() {
+      if(!user) return;
       setIsLoading(true);
       setError(null);
 

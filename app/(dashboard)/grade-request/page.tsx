@@ -70,6 +70,7 @@ export default function GradeRequestPage() {
     const controller = new AbortController();
 
     async function loadRequests() {
+      if(!user) return;
       setIsLoading(true);
       setError(null);
 

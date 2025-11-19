@@ -60,6 +60,7 @@ export default function StudyPlanPage() {
     const controller = new AbortController();
 
     async function loadStudyPlan() {
+      if(!user) return;
       setIsLoading(true);
       setError(null);
 
