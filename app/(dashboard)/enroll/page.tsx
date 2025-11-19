@@ -1,142 +1,240 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search } from 'lucide-react';
+import { useAppStore } from '@/store';
+import { useToast } from '@/hooks/use-toast';
+import { Plus } from 'lucide-react';
+
+interface AvailableCourse {
+  id: string;
+  code: string;
+  title: string;
+  creditHours: number;
+  prerequisite: string | null;
+  enrolled: number;
+  capacity: number;
+  department: string;
+  semester: number;
+  available: boolean;
+  alreadyEnrolled: boolean;
+}
+
+interface EnrollmentSummary {
+  availableCount: number;
+  currentCredits: number;
+  creditLimit: number;
+  enrolledCount: number;
+}
+
+interface ActiveTermInfo {
+  id: string;
+  name: string;
+  season: string;
+  year: number;
+  registrationEndsOn: string;
+}
 
 export default function EnrollPage() {
+  const { user } = useAppStore();
+  const { toast } = useToast();
   const [selectedDepartment, setSelectedDepartment] = useState('all');
+  const [courses, setCourses] = useState<AvailableCourse[]>([]);
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [summary, setSummary] = useState<EnrollmentSummary | null>(null);
+  const [term, setTerm] = useState<ActiveTermInfo | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [enrollingCourse, setEnrollingCourse] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock data
-  const availableCourses = [
-    {
-      id: '5',
-      code: 'CS-407',
-      title: 'Machine Learning',
-      creditHours: 3,
-      prerequisite: 'CS-301, MT-205',
-      enrolled: 25,
-      capacity: 30,
-      department: 'Computer Science',
-      available: true
-    },
-    {
-      id: '6',
-      code: 'CS-409',
-      title: 'Computer Graphics',
-      creditHours: 4,
-      prerequisite: 'CS-205, MT-203',
-      enrolled: 20,
-      capacity: 25,
-      department: 'Computer Science',
-      available: true
-    },
-    {
-      id: '7',
-      code: 'MT-403',
-      title: 'Statistics',
-      creditHours: 3,
-      prerequisite: 'MT-201',
-      enrolled: 30,
-      capacity: 30,
-      department: 'Mathematics',
-      available: false
-    },
-    {
-      id: '8',
-      code: 'EE-401',
-      title: 'Digital Signal Processing',
-      creditHours: 3,
-      prerequisite: 'EE-301',
-      enrolled: 18,
-      capacity: 25,
-      department: 'Electrical Engineering',
-      available: true
-    },
-  ];
+  const loadCourses = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!user) return;
+      setIsLoading(true);
+      setError(null);
 
-  const departments = [
-    'Computer Science',
-    'Mathematics',
-    'Electrical Engineering',
-    'Physics',
-  ];
+      try {
+        const params = new URLSearchParams({ userId: user.id });
+        const response = await fetch(`/api/enroll?${params.toString()}`, {
+          signal,
+        });
 
-  const filteredCourses = selectedDepartment === 'all' 
-    ? availableCourses 
-    : availableCourses.filter(course => course.department === selectedDepartment);
+        if (!response.ok) {
+          const result = await response.json().catch(() => ({}));
+          throw new Error(result?.message || 'Failed to load enrollment data');
+        }
 
-  const columns = [
-    {
-      key: 'code',
-      title: 'Course Code',
-      render: (value: string) => (
-        <span className="font-mono text-blue-400">{value}</span>
-      ),
-      sortable: true,
+        const payload = (await response.json()) as {
+          courses: AvailableCourse[];
+          departments: string[];
+          summary: EnrollmentSummary;
+          term: ActiveTermInfo;
+        };
+
+        setCourses(payload.courses);
+        setDepartments(['all', ...payload.departments]);
+        setSummary(payload.summary);
+        setTerm(payload.term);
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+        console.error('Enrollment fetch error', err);
+        setError(err.message || 'Failed to load course availability');
+        toast({
+          title: 'Unable to load courses',
+          description: err.message || 'Please refresh and try again.',
+        });
+      } finally {
+        setIsLoading(false);
+      }
     },
-    {
-      key: 'title',
-      title: 'Course Title',
-      render: (value: string) => (
-        <span className="font-medium text-white">{value}</span>
-      ),
-      sortable: true,
+    [toast, user]
+  );
+
+  useEffect(() => {
+    if (!user) return;
+    const controller = new AbortController();
+    loadCourses(controller.signal);
+    return () => controller.abort();
+  }, [loadCourses, user]);
+
+  const filteredCourses = useMemo(() => {
+    if (selectedDepartment === 'all') {
+      return courses;
+    }
+    return courses.filter((course) => course.department === selectedDepartment);
+  }, [courses, selectedDepartment]);
+
+  const handleEnroll = useCallback(
+    async (courseId: string) => {
+      if (!user) return;
+      setEnrollingCourse(courseId);
+
+      try {
+        const response = await fetch('/api/enroll', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId: user.id, courseId }),
+        });
+
+        if (!response.ok) {
+          const result = await response.json().catch(() => ({}));
+          throw new Error(result?.message || 'Enrollment failed');
+        }
+
+        toast({
+          title: 'Enrollment successful',
+          description: 'The course has been added to your registrations.',
+        });
+        await loadCourses();
+      } catch (err: any) {
+        console.error('Enrollment error', err);
+        toast({
+          title: 'Unable to enroll',
+          description: err.message || 'Please try again later.',
+        });
+      } finally {
+        setEnrollingCourse(null);
+      }
     },
-    {
-      key: 'creditHours',
-      title: 'Credit Hours',
-      render: (value: number) => (
-        <Badge variant="outline" className="border-gray-600 text-gray-300">
-          {value} CR
-        </Badge>
-      ),
-      sortable: true,
-    },
-    {
-      key: 'capacity',
-      title: 'Enrollment',
-      render: (value: number, item: any) => (
-        <div className="text-sm">
-          <span className="text-gray-400">{item.enrolled}/{value}</span>
-          <div className="w-full bg-gray-600 rounded-full h-1 mt-1">
-            <div
-              className="bg-blue-500 h-1 rounded-full"
-              style={{ width: `${(item.enrolled / value) * 100}%` }}
-            />
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: 'available',
-      title: 'Status',
-      render: (value: boolean) => (
-        <Badge variant={value ? 'default' : 'destructive'}>
-          {value ? 'Available' : 'Full'}
-        </Badge>
-      ),
-    },
-    {
-      key: 'actions',
-      title: 'Actions',
-      render: (value: any, item: any) => (
-        <Button
-          size="sm"
-          disabled={!item.available}
-          className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
-        >
-          <Plus className="h-3 w-3 mr-1" />
-          Enroll
-        </Button>
-      ),
-    },
-  ];
+    [loadCourses, toast, user]
+  );
+
+  const columns = useMemo(
+    () => [
+      {
+        key: 'code',
+        title: 'Course Code',
+        render: (value: string) => (
+          <span className="font-mono text-blue-400">{value}</span>
+        ),
+        sortable: true,
+      },
+      {
+        key: 'title',
+        title: 'Course Title',
+        render: (value: string) => (
+          <span className="font-medium text-white">{value}</span>
+        ),
+        sortable: true,
+      },
+      {
+        key: 'creditHours',
+        title: 'Credit Hours',
+        render: (value: number) => (
+          <Badge variant="outline" className="border-gray-600 text-gray-300">
+            {value} CR
+          </Badge>
+        ),
+        sortable: true,
+      },
+      {
+        key: 'capacity',
+        title: 'Enrollment',
+        render: (value: number, item: AvailableCourse) => {
+          const fillPercent = value ? Math.min((item.enrolled / value) * 100, 100) : 0;
+          return (
+            <div className="text-sm">
+              <span className="text-gray-400">
+                {item.enrolled}/{value}
+              </span>
+              <div className="w-full bg-gray-600 rounded-full h-1 mt-1">
+                <div
+                  className="bg-blue-500 h-1 rounded-full"
+                  style={{ width: `${fillPercent}%` }}
+                />
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        key: 'available',
+        title: 'Status',
+        render: (_: boolean, item: AvailableCourse) => (
+          <Badge
+            variant={item.available ? 'default' : 'destructive'}
+            className={item.available ? 'bg-emerald-600' : ''}
+          >
+            {item.available ? 'Available' : item.alreadyEnrolled ? 'Enrolled' : 'Full'}
+          </Badge>
+        ),
+      },
+      {
+        key: 'actions',
+        title: 'Actions',
+        render: (_: unknown, item: AvailableCourse) => (
+          <Button
+            size="sm"
+            disabled={!item.available || enrollingCourse === item.id}
+            className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
+            onClick={() => handleEnroll(item.id)}
+          >
+            <Plus className="h-3 w-3 mr-1" />
+            {enrollingCourse === item.id ? 'Enrolling...' : 'Enroll'}
+          </Button>
+        ),
+      },
+    ],
+    [enrollingCourse, handleEnroll]
+  );
+
+  if (!user) {
+    return <div className="text-gray-300">Sign in to enroll in courses.</div>;
+  }
+
+  const registrationDeadline = term?.registrationEndsOn
+    ? new Date(term.registrationEndsOn).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : null;
 
   return (
     <div className="space-y-6">
@@ -145,7 +243,12 @@ export default function EnrollPage() {
         <p className="text-gray-400">Browse and enroll in available courses</p>
       </div>
 
-      {/* Filters */}
+      {error ? (
+        <p className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+          {error}
+        </p>
+      ) : null}
+
       <Card className="bg-gray-800 border-gray-700">
         <CardHeader>
           <CardTitle className="text-white">Filter Courses</CardTitle>
@@ -157,10 +260,9 @@ export default function EnrollPage() {
                 <SelectValue placeholder="Select department" />
               </SelectTrigger>
               <SelectContent className="bg-gray-800 border-gray-700">
-                <SelectItem value="all" className="text-white">All Departments</SelectItem>
                 {departments.map((dept) => (
                   <SelectItem key={dept} value={dept} className="text-white">
-                    {dept}
+                    {dept === 'all' ? 'All Departments' : dept}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -169,13 +271,14 @@ export default function EnrollPage() {
         </CardContent>
       </Card>
 
-      {/* Enrollment Summary */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="bg-gray-800 border-gray-700">
           <CardContent className="p-6">
             <div className="text-center">
               <p className="text-gray-400 text-sm">Available Courses</p>
-              <p className="text-2xl font-bold text-white">{availableCourses.filter(c => c.available).length}</p>
+              <p className="text-2xl font-bold text-white">
+                {summary?.availableCount ?? 0}
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -183,8 +286,12 @@ export default function EnrollPage() {
           <CardContent className="p-6">
             <div className="text-center">
               <p className="text-gray-400 text-sm">Credit Limit</p>
-              <p className="text-2xl font-bold text-white">21</p>
-              <p className="text-xs text-gray-500">Currently enrolled: 13</p>
+              <p className="text-2xl font-bold text-white">
+                {summary?.creditLimit ?? 0}
+              </p>
+              <p className="text-xs text-gray-500">
+                Currently enrolled: {summary?.currentCredits ?? 0} credit hours
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -192,25 +299,34 @@ export default function EnrollPage() {
           <CardContent className="p-6">
             <div className="text-center">
               <p className="text-gray-400 text-sm">Registration Period</p>
-              <p className="text-2xl font-bold text-emerald-400">Open</p>
-              <p className="text-xs text-gray-500">Ends Jan 15, 2025</p>
+              <p className="text-2xl font-bold text-emerald-400">
+                {registrationDeadline ? 'Open' : 'Pending'}
+              </p>
+              <p className="text-xs text-gray-500">
+                {registrationDeadline
+                  ? `Ends ${registrationDeadline}`
+                  : 'Registration window not announced'}
+              </p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Available Courses Table */}
       <Card className="bg-gray-800 border-gray-700">
         <CardHeader>
           <CardTitle className="text-white">Available Courses</CardTitle>
         </CardHeader>
         <CardContent>
-          <DataTable
-            data={filteredCourses}
-            columns={columns}
-            searchKey="title"
-            emptyMessage="No courses available for enrollment"
-          />
+          {isLoading ? (
+            <p className="text-sm text-gray-400">Loading available courses...</p>
+          ) : (
+            <DataTable
+              data={filteredCourses}
+              columns={columns}
+              searchKey="title"
+              emptyMessage="No courses available for enrollment"
+            />
+          )}
         </CardContent>
       </Card>
     </div>

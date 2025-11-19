@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { supabaseBrowserClient } from '@/utils/supabase/client';
 import { useAppStore } from '@/store';
 
 export function AuthMenu() {
@@ -16,10 +15,16 @@ export function AuthMenu() {
   const handleSignOut = async () => {
     try {
       setIsSigningOut(true);
-      await supabaseBrowserClient.auth.signOut();
+      const response = await fetch('/api/auth/logout', {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to sign out');
+      }
       logout();
     } catch (error) {
-      console.error('Failed to sign out from Supabase', error);
+      console.error('Failed to sign out', error);
     } finally {
       setIsSigningOut(false);
     }

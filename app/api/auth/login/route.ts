@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { loginSchema } from '@/lib/validation/auth';
+import { AUTH_COOKIE_NAME, AUTH_TOKEN_MAX_AGE, signAuthToken, toPublicUser } from '@/lib/auth';
 
 export async function POST(request: Request) {
   try {
@@ -50,15 +51,28 @@ export async function POST(request: Request) {
       );
     }
 
-    const { password: _password, ...sanitizedUser } = user;
+    const sanitizedUser = toPublicUser(user);
+    const token = signAuthToken(sanitizedUser.id);
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         message: 'Login successful',
         user: sanitizedUser,
       },
       { status: 200 }
     );
+
+    response.cookies.set({
+      name: AUTH_COOKIE_NAME,
+      value: token,
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: AUTH_TOKEN_MAX_AGE,
+    });
+
+    return response;
   } catch (error) {
     console.error('Login error', error);
     return NextResponse.json(

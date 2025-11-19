@@ -1,155 +1,170 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PDFButton } from '@/components/ui/pdf-button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Award, TrendingUp, BookOpen, Calendar } from 'lucide-react';
+import { useAppStore } from '@/store';
+import { useToast } from '@/hooks/use-toast';
+
+interface TranscriptRecord {
+  id: string;
+  courseCode: string;
+  courseTitle: string;
+  creditHours: number;
+  grade: string;
+  gradePoints: number;
+  termId: string | null;
+  term: string | null;
+  createdAt: string;
+}
+
+interface TranscriptSummary {
+  cgpa: number | null;
+  totalCreditHours: number;
+  coursesCompleted: number;
+  termCount: number;
+}
+
+interface TermStat {
+  term: string | null;
+  credits: number;
+  gpa: number;
+}
 
 export default function TranscriptPage() {
+  const { user } = useAppStore();
+  const { toast } = useToast();
+  const [records, setRecords] = useState<TranscriptRecord[]>([]);
+  const [summary, setSummary] = useState<TranscriptSummary | null>(null);
+  const [terms, setTerms] = useState<string[]>([]);
+  const [termStats, setTermStats] = useState<TermStat[]>([]);
   const [selectedTerm, setSelectedTerm] = useState('all');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock data
-  const transcriptData = [
-    {
-      id: '1',
-      courseCode: 'CS-399',
-      courseTitle: 'Web Engineering',
-      creditHours: 3,
-      grade: 'A-',
-      gradePoints: 3.67,
-      term: 'Spring 2024',
-      year: 2024,
-    },
-    {
-      id: '2',
-      courseCode: 'CS-397',
-      courseTitle: 'Mobile Computing',
-      creditHours: 4,
-      grade: 'B+',
-      gradePoints: 3.33,
-      term: 'Spring 2024',
-      year: 2024,
-    },
-    {
-      id: '3',
-      courseCode: 'CS-395',
-      courseTitle: 'AI Fundamentals',
-      creditHours: 3,
-      grade: 'A',
-      gradePoints: 4.0,
-      term: 'Spring 2024',
-      year: 2024,
-    },
-    {
-      id: '4',
-      courseCode: 'MT-301',
-      courseTitle: 'Linear Algebra',
-      creditHours: 3,
-      grade: 'B-',
-      gradePoints: 2.67,
-      term: 'Fall 2023',
-      year: 2023,
-    },
-    {
-      id: '5',
-      courseCode: 'CS-301',
-      courseTitle: 'Data Structures',
-      creditHours: 4,
-      grade: 'A',
-      gradePoints: 4.0,
-      term: 'Fall 2023',
-      year: 2023,
-    },
-  ];
+  useEffect(() => {
+    if (!user) return;
 
-  const terms = ['Fall 2023', 'Spring 2024', 'Fall 2024'];
-  
-  const filteredData = selectedTerm === 'all' 
-    ? transcriptData 
-    : transcriptData.filter(record => record.term === selectedTerm);
+    const controller = new AbortController();
 
-  // Calculate statistics
-  const totalCreditHours = transcriptData.reduce((sum, record) => sum + record.creditHours, 0);
-  const totalQualityPoints = transcriptData.reduce((sum, record) => sum + (record.creditHours * record.gradePoints), 0);
-  const cgpa = totalQualityPoints / totalCreditHours;
-  
-  const termStats = terms.map(term => {
-    const termRecords = transcriptData.filter(record => record.term === term);
-    const termCredits = termRecords.reduce((sum, record) => sum + record.creditHours, 0);
-    const termQualityPoints = termRecords.reduce((sum, record) => sum + (record.creditHours * record.gradePoints), 0);
-    const termGpa = termCredits > 0 ? termQualityPoints / termCredits : 0;
-    
-    return {
-      term,
-      credits: termCredits,
-      gpa: termGpa,
-    };
-  });
+    async function loadTranscript() {
+      setIsLoading(true);
+      setError(null);
 
-  const columns = [
-    {
-      key: 'courseCode',
-      title: 'Course Code',
-      render: (value: string) => (
-        <span className="font-mono text-blue-400">{value}</span>
-      ),
-      sortable: true,
-    },
-    {
-      key: 'courseTitle',
-      title: 'Course Title',
-      render: (value: string) => (
-        <span className="font-medium text-white">{value}</span>
-      ),
-      sortable: true,
-    },
-    {
-      key: 'creditHours',
-      title: 'Credit Hours',
-      render: (value: number) => (
-        <Badge variant="outline" className="border-gray-600 text-gray-300">
-          {value} CR
-        </Badge>
-      ),
-      sortable: true,
-    },
-    {
-      key: 'grade',
-      title: 'Grade',
-      render: (value: string) => {
-        const isHighGrade = ['A', 'A-', 'B+'].includes(value);
-        return (
-          <Badge
-            variant={isHighGrade ? 'default' : 'secondary'}
-            className={isHighGrade ? 'bg-emerald-600' : ''}
-          >
-            {value}
-          </Badge>
-        );
+      try {
+        const params = new URLSearchParams({ userId: user.id });
+        const response = await fetch(`/api/transcript?${params.toString()}`, {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          const result = await response.json().catch(() => ({}));
+          throw new Error(result?.message || 'Failed to load transcript data');
+        }
+
+        const payload = (await response.json()) as {
+          records: TranscriptRecord[];
+          summary: TranscriptSummary;
+          terms: string[];
+          termStats: TermStat[];
+        };
+
+        setRecords(payload.records);
+        setSummary(payload.summary);
+        setTerms(payload.terms);
+        setTermStats(payload.termStats);
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+        console.error('Transcript fetch error', err);
+        setError(err.message || 'Failed to load transcript data');
+        toast({
+          title: 'Unable to load transcript',
+          description: err.message || 'Please try again later.',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadTranscript();
+    return () => controller.abort();
+  }, [toast, user]);
+
+  const filteredRecords = useMemo(() => {
+    if (selectedTerm === 'all') return records;
+    return records.filter((record) => record.term === selectedTerm);
+  }, [records, selectedTerm]);
+
+  const columns = useMemo(
+    () => [
+      {
+        key: 'courseCode',
+        title: 'Course Code',
+        render: (value: string) => <span className="font-mono text-blue-400">{value}</span>,
+        sortable: true,
       },
-      sortable: true,
-    },
-    {
-      key: 'gradePoints',
-      title: 'Grade Points',
-      render: (value: number) => (
-        <span className="font-mono text-gray-300">{value.toFixed(2)}</span>
-      ),
-      sortable: true,
-    },
-    {
-      key: 'term',
-      title: 'Term',
-      render: (value: string) => (
-        <span className="text-gray-400 text-sm">{value}</span>
-      ),
-      sortable: true,
-    },
-  ];
+      {
+        key: 'courseTitle',
+        title: 'Course Title',
+        render: (value: string) => <span className="font-medium text-white">{value}</span>,
+        sortable: true,
+      },
+      {
+        key: 'creditHours',
+        title: 'Credit Hours',
+        render: (value: number) => (
+          <Badge variant="outline" className="border-gray-600 text-gray-300">
+            {value} CR
+          </Badge>
+        ),
+        sortable: true,
+      },
+      {
+        key: 'grade',
+        title: 'Grade',
+        render: (value: string) => {
+          const isHighGrade = ['A', 'A-', 'B+'].includes(value);
+          return (
+            <Badge
+              variant={isHighGrade ? 'default' : 'secondary'}
+              className={isHighGrade ? 'bg-emerald-600' : ''}
+            >
+              {value}
+            </Badge>
+          );
+        },
+        sortable: true,
+      },
+      {
+        key: 'gradePoints',
+        title: 'Grade Points',
+        render: (value: number) => <span className="font-mono text-gray-300">{value.toFixed(2)}</span>,
+        sortable: true,
+      },
+      {
+        key: 'term',
+        title: 'Term',
+        render: (value: string | null) => (
+          <span className="text-gray-400 text-sm">{value ?? 'N/A'}</span>
+        ),
+        sortable: true,
+      },
+    ],
+    []
+  );
+
+  if (!user) {
+    return <p className="text-gray-300">Sign in to view transcript information.</p>;
+  }
+
+  const cgpa = summary?.cgpa ?? null;
+  const totalCreditHours = summary?.totalCreditHours ?? 0;
+  const coursesCompleted = summary?.coursesCompleted ?? 0;
+  const termCount = summary?.termCount ?? 0;
 
   return (
     <div className="space-y-6">
@@ -161,25 +176,32 @@ export default function TranscriptPage() {
         <PDFButton
           title="Official Transcript"
           data={{
-            studentName: 'Sahil Latif',
-            studentId: '23I-0763',
-            program: 'BS Computer Science',
-            cgpa: cgpa.toFixed(2),
-            totalCreditHours: totalCreditHours,
-            records: filteredData.length,
+            studentName: `${user.firstName} ${user.lastName}`,
+            studentId: user.studentId,
+            program: user.program,
+            cgpa: cgpa !== null ? cgpa.toFixed(2) : 'N/A',
+            totalCreditHours,
+            records: filteredRecords.length,
           }}
           filename="official-transcript.pdf"
         />
       </div>
 
-      {/* Academic Summary */}
+      {error ? (
+        <p className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+          {error}
+        </p>
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="bg-gray-800 border-gray-700">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-sm">CGPA</p>
-                <p className="text-2xl font-bold text-white">{cgpa.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-white">
+                  {cgpa !== null ? cgpa.toFixed(2) : 'N/A'}
+                </p>
               </div>
               <Award className="h-8 w-8 text-blue-500" />
             </div>
@@ -201,7 +223,7 @@ export default function TranscriptPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-sm">Courses Completed</p>
-                <p className="text-2xl font-bold text-white">{transcriptData.length}</p>
+                <p className="text-2xl font-bold text-white">{coursesCompleted}</p>
               </div>
               <TrendingUp className="h-8 w-8 text-amber-500" />
             </div>
@@ -212,7 +234,7 @@ export default function TranscriptPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-sm">Academic Terms</p>
-                <p className="text-2xl font-bold text-white">{terms.length}</p>
+                <p className="text-2xl font-bold text-white">{termCount}</p>
               </div>
               <Calendar className="h-8 w-8 text-purple-500" />
             </div>
@@ -220,33 +242,35 @@ export default function TranscriptPage() {
         </Card>
       </div>
 
-      {/* Term-wise Performance */}
       <Card className="bg-gray-800 border-gray-700">
         <CardHeader>
           <CardTitle className="text-white">Term-wise Performance</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-3">
-            {termStats.map((stat) => (
-              <div key={stat.term} className="bg-gray-700 rounded-lg p-4">
-                <h3 className="font-medium text-white mb-2">{stat.term}</h3>
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Credits:</span>
-                    <span className="text-white">{stat.credits}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">GPA:</span>
-                    <span className="text-emerald-400 font-bold">{stat.gpa.toFixed(2)}</span>
+            {termStats.length ? (
+              termStats.map((stat, index) => (
+                <div key={`${stat.term ?? 'unknown'}-${index}`} className="bg-gray-700 rounded-lg p-4">
+                  <h3 className="font-medium text-white mb-2">{stat.term ?? 'Unknown Term'}</h3>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Credits:</span>
+                      <span className="text-white">{stat.credits}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">GPA:</span>
+                      <span className="text-emerald-400 font-bold">{stat.gpa.toFixed(2)}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-sm text-gray-400">No term statistics available.</p>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Filter */}
       <Card className="bg-gray-800 border-gray-700">
         <CardHeader>
           <CardTitle className="text-white">Filter by Term</CardTitle>
@@ -257,7 +281,9 @@ export default function TranscriptPage() {
               <SelectValue placeholder="Select term" />
             </SelectTrigger>
             <SelectContent className="bg-gray-800 border-gray-700">
-              <SelectItem value="all" className="text-white">All Terms</SelectItem>
+              <SelectItem value="all" className="text-white">
+                All Terms
+              </SelectItem>
               {terms.map((term) => (
                 <SelectItem key={term} value={term} className="text-white">
                   {term}
@@ -268,18 +294,21 @@ export default function TranscriptPage() {
         </CardContent>
       </Card>
 
-      {/* Transcript Table */}
       <Card className="bg-gray-800 border-gray-700">
         <CardHeader>
           <CardTitle className="text-white">Grade Records</CardTitle>
         </CardHeader>
         <CardContent>
-          <DataTable
-            data={filteredData}
-            columns={columns}
-            searchKey="courseTitle"
-            emptyMessage="No grade records found"
-          />
+          {isLoading ? (
+            <p className="text-sm text-gray-400">Loading grade records...</p>
+          ) : (
+            <DataTable
+              data={filteredRecords}
+              columns={columns}
+              searchKey="courseTitle"
+              emptyMessage="No grade records found"
+            />
+          )}
         </CardContent>
       </Card>
     </div>

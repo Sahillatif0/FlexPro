@@ -19,6 +19,7 @@ export const useAppStore = create<AppStore>()(
       name: 'flexpro-storage',
       partialize: (state) => ({
         user: state.user,
+        isAuthenticated: state.isAuthenticated,
         theme: state.theme,
         sidebarCollapsed: state.sidebarCollapsed,
       }),

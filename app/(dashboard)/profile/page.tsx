@@ -1,17 +1,23 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useAppStore } from '@/store';
-import { User, Mail, Phone, MapPin, Book, Award, Calendar, Save, Edit3 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { User as UserIcon, Mail, Phone, MapPin, Book, Award, Calendar, Save, Edit3 } from 'lucide-react';
+import type { User as StoreUser } from '@/store/user-slice';
 
 export default function ProfilePage() {
-  const { user, updateUser } = useAppStore();
+  const { user, setUser } = useAppStore();
+  const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -20,14 +26,123 @@ export default function ProfilePage() {
     address: user?.address || '',
   });
 
-  const handleSave = () => {
-    updateUser(formData);
-    setIsEditing(false);
+  useEffect(() => {
+    if (!user) return;
+
+    const controller = new AbortController();
+
+    async function loadProfile() {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const params = new URLSearchParams({ userId: user.id });
+        const response = await fetch(`/api/profile?${params.toString()}`, {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          const result = await response.json().catch(() => ({}));
+          throw new Error(result?.message || 'Failed to load profile');
+        }
+
+        const payload = (await response.json()) as {
+          user: StoreUser;
+        };
+
+        setUser(payload.user);
+        setFormData({
+          firstName: payload.user.firstName,
+          lastName: payload.user.lastName,
+          bio: payload.user.bio || '',
+          phone: payload.user.phone || '',
+          address: payload.user.address || '',
+        });
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+        console.error('Profile fetch error', err);
+        setError(err.message || 'Failed to load profile');
+        toast({
+          title: 'Unable to load profile',
+          description: err.message || 'Please try again later.',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadProfile();
+    return () => controller.abort();
+  }, [setUser, toast, user?.id]);
+
+  const handleSave = async () => {
+    if (!user) return;
+
+    setIsSaving(true);
+
+    try {
+      const response = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          ...formData,
+        }),
+      });
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result?.message || 'Failed to update profile');
+      }
+
+      const payload = (await response.json()) as {
+        user: StoreUser;
+      };
+
+      setUser(payload.user);
+      setFormData({
+        firstName: payload.user.firstName,
+        lastName: payload.user.lastName,
+        bio: payload.user.bio || '',
+        phone: payload.user.phone || '',
+        address: payload.user.address || '',
+      });
+
+      toast({
+        title: 'Profile updated',
+        description: 'Your changes have been saved successfully.',
+      });
+
+      setIsEditing(false);
+    } catch (err: any) {
+      console.error('Profile save error', err);
+      toast({
+        title: 'Unable to update profile',
+        description: err.message || 'Please try again later.',
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
+  useEffect(() => {
+    if (!user) return;
+    setFormData({
+      firstName: user.firstName,
+      lastName: user.lastName,
+      bio: user.bio || '',
+      phone: user.phone || '',
+      address: user.address || '',
+    });
+  }, [user?.firstName, user?.lastName, user?.bio, user?.phone, user?.address]);
+
   if (!user) {
-    return <div>Loading...</div>;
+    return <p className="text-gray-300">Sign in to view profile information.</p>;
   }
+
+  const cgpaDisplay = Number.isFinite(user.cgpa) ? user.cgpa.toFixed(2) : 'N/A';
 
   return (
     <div className="space-y-6">
@@ -36,14 +151,19 @@ export default function ProfilePage() {
           <h1 className="text-3xl font-bold text-white">Profile</h1>
           <p className="text-gray-400">Manage your personal information and settings</p>
         </div>
-        <Button
-          onClick={() => setIsEditing(!isEditing)}
-          variant={isEditing ? "outline" : "default"}
-          className={isEditing ? "border-gray-600 text-gray-300" : "bg-blue-600 hover:bg-blue-700"}
-        >
-          <Edit3 className="h-4 w-4 mr-2" />
-          {isEditing ? 'Cancel' : 'Edit Profile'}
-        </Button>
+        <div className="flex items-center gap-2">
+          {isLoading ? (
+            <span className="text-sm text-gray-400">Refreshing profile...</span>
+          ) : null}
+          <Button
+            onClick={() => setIsEditing(!isEditing)}
+            variant={isEditing ? 'outline' : 'default'}
+            className={isEditing ? 'border-gray-600 text-gray-300' : 'bg-blue-600 hover:bg-blue-700'}
+          >
+            <Edit3 className="h-4 w-4 mr-2" />
+            {isEditing ? 'Cancel' : 'Edit Profile'}
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -79,9 +199,13 @@ export default function ProfilePage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-white">Personal Information</CardTitle>
               {isEditing && (
-                <Button onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-700">
+                <Button
+                  onClick={handleSave}
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                  disabled={isSaving}
+                >
                   <Save className="h-4 w-4 mr-2" />
-                  Save Changes
+                  {isSaving ? 'Saving…' : 'Save Changes'}
                 </Button>
               )}
             </CardHeader>
@@ -97,7 +221,7 @@ export default function ProfilePage() {
                     />
                   ) : (
                     <div className="mt-1 flex items-center gap-2">
-                      <User className="h-4 w-4 text-gray-400" />
+                      <UserIcon className="h-4 w-4 text-gray-400" />
                       <span className="text-white">{user.firstName}</span>
                     </div>
                   )}
@@ -112,7 +236,7 @@ export default function ProfilePage() {
                     />
                   ) : (
                     <div className="mt-1 flex items-center gap-2">
-                      <User className="h-4 w-4 text-gray-400" />
+                      <UserIcon className="h-4 w-4 text-gray-400" />
                       <span className="text-white">{user.lastName}</span>
                     </div>
                   )}
@@ -185,6 +309,12 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
 
+          {error ? (
+            <p className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              {error}
+            </p>
+          ) : null}
+
           {/* Academic Information */}
           <Card className="bg-gray-800 border-gray-700">
             <CardHeader>
@@ -221,7 +351,7 @@ export default function ProfilePage() {
                   <label className="text-gray-300 text-sm font-medium">CGPA</label>
                   <div className="mt-1 flex items-center gap-2">
                     <Award className="h-4 w-4 text-gray-400" />
-                    <span className="text-emerald-400 font-bold">{user.cgpa.toFixed(2)}</span>
+                    <span className="text-emerald-400 font-bold">{cgpaDisplay}</span>
                   </div>
                 </div>
               </div>
