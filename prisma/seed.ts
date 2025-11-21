@@ -111,6 +111,39 @@ async function main() {
     } as any,
   });
 
+  const facultyTwo = await prisma.user.upsert({
+    where: { studentId: 'FAC-1002' },
+    update: {
+      email: 'bilal.ahmed@flexpro.edu',
+      firstName: 'Bilal',
+      lastName: 'Ahmed',
+      role: 'faculty',
+      employeeId: 'EMP-1002',
+      program: 'Faculty of Computing',
+      semester: 0,
+      cgpa: 0,
+      bio: 'Visiting lecturer covering advanced computing electives.',
+      phone: '+92-300-1122334',
+      address: 'Lahore, Pakistan',
+      password: facultyPassword,
+    } as any,
+    create: {
+      email: 'bilal.ahmed@flexpro.edu',
+      password: facultyPassword,
+      firstName: 'Bilal',
+      lastName: 'Ahmed',
+      studentId: 'FAC-1002',
+      employeeId: 'EMP-1002',
+      role: 'faculty',
+      program: 'Faculty of Computing',
+      semester: 0,
+      cgpa: 0,
+      bio: 'Visiting lecturer covering advanced computing electives.',
+      phone: '+92-300-1122334',
+      address: 'Lahore, Pakistan',
+    } as any,
+  });
+
   const adminPassword = await bcrypt.hash('admin123', 10);
   const admin = await prisma.user.upsert({
     where: { studentId: 'ADM-0001' },
@@ -374,11 +407,63 @@ async function main() {
     {}
   );
 
-  const taughtCourseCodes = ['CS-401', 'CS-403', 'CS-405', 'CS-407', 'CS-409'];
-  await prisma.course.updateMany({
-    where: { code: { in: taughtCourseCodes } },
-    data: { instructorId: faculty.id } as any,
-  });
+  const courseSectionSeeds: {
+    code: string;
+    sections: { name: string; instructorId: string | null }[];
+  }[] = [
+    {
+      code: 'CS-401',
+      sections: [
+        { name: 'BCS-23A', instructorId: faculty.id },
+        { name: 'BCS-23B', instructorId: facultyTwo.id },
+      ],
+    },
+    {
+      code: 'CS-403',
+      sections: [
+        { name: 'BCS-23A', instructorId: faculty.id },
+        { name: 'BCS-23C', instructorId: facultyTwo.id },
+      ],
+    },
+    {
+      code: 'CS-405',
+      sections: [{ name: 'BCS-23A', instructorId: faculty.id }],
+    },
+    {
+      code: 'CS-407',
+      sections: [
+        { name: 'BCS-23A', instructorId: faculty.id },
+        { name: 'BCS-23D', instructorId: facultyTwo.id },
+      ],
+    },
+    {
+      code: 'CS-409',
+      sections: [{ name: 'BCS-23A', instructorId: facultyTwo.id }],
+    },
+  ];
+
+  for (const seed of courseSectionSeeds) {
+    const course = courseByCode[seed.code];
+    if (!course) continue;
+    for (const section of seed.sections) {
+      await (prisma as any).courseSection.upsert({
+        where: {
+          courseId_name: {
+            courseId: course.id,
+            name: section.name,
+          },
+        },
+        update: {
+          instructorId: section.instructorId,
+        },
+        create: {
+          courseId: course.id,
+          name: section.name,
+          instructorId: section.instructorId,
+        },
+      });
+    }
+  }
 
   const activeEnrollmentCodes = ['CS-401', 'CS-403', 'CS-405'];
   for (const code of activeEnrollmentCodes) {

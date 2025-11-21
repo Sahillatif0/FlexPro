@@ -28,6 +28,7 @@ export async function GET(request: Request) {
     const courseId = searchParams.get("courseId");
     const termId = searchParams.get("termId");
     const dateParam = searchParams.get("date");
+    const sectionId = searchParams.get("sectionId");
 
     if (!courseId || !termId) {
       return NextResponse.json({ message: "courseId and termId are required" }, { status: 400 });
@@ -39,17 +40,32 @@ export async function GET(request: Request) {
     }
 
     const course = await prisma.course.findFirst({
-      where: { id: courseId, instructorId: sessionUser.id } as any,
-      include: {
-        enrollments: {
-          where: { termId },
-          include: { user: true },
+      where: {
+        id: courseId,
+        sections: {
+          some: {
+            instructorId: sessionUser.id,
+          },
         },
       },
-    });
+      include: {
+        sections: {
+          where: { instructorId: sessionUser.id },
+        },
+      },
+    } as any);
 
     if (!course) {
       return NextResponse.json({ message: "Course not found" }, { status: 404 });
+    }
+
+    const assignedSections = Array.isArray((course as any).sections)
+      ? ((course as any).sections as any[])
+      : [];
+    const sectionById = new Map<string, any>(assignedSections.map((section) => [section.id, section]));
+
+    if (sectionId && sectionId !== "__unassigned__" && !sectionById.has(sectionId)) {
+      return NextResponse.json({ message: "Section not found" }, { status: 404 });
     }
 
     const records = await prisma.attendance.findMany({
@@ -90,6 +106,7 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => null);
     const courseId = body?.courseId as string | undefined;
     const termId = body?.termId as string | undefined;
+    const sectionId = body?.sectionId as string | undefined;
     const dateValue = typeof body?.date === "string" ? body.date : undefined;
     const entries = Array.isArray(body?.entries) ? body.entries : [];
 
@@ -103,11 +120,44 @@ export async function POST(request: Request) {
     }
 
     const course = await prisma.course.findFirst({
-      where: { id: courseId, instructorId: sessionUser.id } as any,
-    });
+      where: {
+        id: courseId,
+        sections: {
+          some: {
+            instructorId: sessionUser.id,
+          },
+        },
+      },
+      include: {
+        sections: {
+          where: { instructorId: sessionUser.id },
+        },
+      },
+    } as any);
 
     if (!course) {
       return NextResponse.json({ message: "Course not found" }, { status: 404 });
+    }
+
+    const courseSections = Array.isArray((course as any).sections)
+      ? ((course as any).sections as any[])
+      : [];
+
+    const normalizedSections = courseSections.map((section: any) => ({
+      id: section.id as string,
+      name: section.name as string,
+      normalizedName: (section.name as string).trim().toLowerCase(),
+    }));
+
+    const sectionLookup = new Map<string, { id: string; name: string; normalizedName: string }>(
+      normalizedSections.map((section) => [section.id, section])
+    );
+    const sectionNameSet = new Set<string>(normalizedSections.map((section) => section.normalizedName));
+
+    const targetSection = sectionId && sectionId !== "__unassigned__" ? sectionLookup.get(sectionId) : undefined;
+
+    if (sectionId && sectionId !== "__unassigned__" && !targetSection) {
+      return NextResponse.json({ message: "Section not found" }, { status: 404 });
     }
 
     const studentIds = entries
@@ -122,12 +172,35 @@ export async function POST(request: Request) {
         termId,
         userId: { in: studentIds },
       },
-      select: {
-        userId: true,
+      include: {
+        user: true,
       },
     });
 
-    const validStudentIds = new Set(enrollments.map((enrollment) => enrollment.userId));
+    const validStudentIds = new Set(
+      (enrollments as any[])
+        .filter((enrollment: any) => {
+          const normalizedStudentSection = (enrollment.user.section ?? "").trim().toLowerCase();
+
+          if (!sectionId) {
+            if (!normalizedStudentSection) {
+              return true;
+            }
+            return sectionNameSet.has(normalizedStudentSection);
+          }
+
+          if (sectionId === "__unassigned__") {
+            return !normalizedStudentSection;
+          }
+
+          if (!targetSection) {
+            return false;
+          }
+
+          return normalizedStudentSection === targetSection.normalizedName;
+        })
+        .map((enrollment) => enrollment.userId)
+    );
     const attendanceDate = new Date(date.toISOString().split("T")[0] + "T00:00:00.000Z");
 
     await Promise.all(

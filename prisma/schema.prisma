@@ -38,7 +38,7 @@ model User {
   feedbacks       Feedback[]
   gradeRequests   GradeRequest[]
   studyPlans      StudyPlan[]
-  teachingCourses Course[]       @relation("CourseInstructor")
+  teachingSections CourseSection[] @relation("CourseSectionInstructor")
   facultyNotes    StudentNote[]  @relation("FacultyNotes")
   studentNotes    StudentNote[]  @relation("StudentNotes")
 
@@ -61,17 +61,30 @@ model Course {
   maxCapacity  Int      @default(50)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-  instructorId String?
-
   enrollments    Enrollment[]
   transcripts    Transcript[]
   attendances    Attendance[]
   feedbacks      Feedback[]
   studyPlanItems StudyPlanItem[]
-  instructor     User?           @relation("CourseInstructor", fields: [instructorId], references: [id])
   notes          StudentNote[]
+  sections       CourseSection[]
 
   @@map("courses")
+}
+
+model CourseSection {
+  id        String   @id @default(cuid())
+  courseId  String
+  name      String
+  instructorId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  instructor User?  @relation("CourseSectionInstructor", fields: [instructorId], references: [id])
+
+  @@unique([courseId, name])
+  @@map("course_sections")
 }
 
 model Enrollment {

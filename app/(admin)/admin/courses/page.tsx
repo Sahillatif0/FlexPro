@@ -10,12 +10,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { BookMarked, GraduationCap } from "lucide-react";
+import { BookMarked, GraduationCap, Plus, X } from "lucide-react";
 
 interface InstructorOption {
   id: string;
   fullName: string;
   employeeId: string | null;
+}
+
+interface SectionInstructorInfo {
+  id: string;
+  firstName: string;
+  lastName: string;
+  employeeId: string | null;
+}
+
+interface CourseSectionRecord {
+  id: string;
+  name: string;
+  instructor: SectionInstructorInfo | null;
 }
 
 interface CourseRecord {
@@ -28,12 +41,7 @@ interface CourseRecord {
   maxCapacity: number;
   isActive: boolean;
   createdAt: string;
-  instructor?: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    employeeId: string | null;
-  } | null;
+  sections: CourseSectionRecord[];
 }
 
 interface CoursesPayload {
@@ -56,8 +64,11 @@ export default function AdminCoursesPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [pendingCourseId, setPendingCourseId] = useState<string | null>(null);
-  const [assigningCourseId, setAssigningCourseId] = useState<string | null>(null);
+  const [assigningSectionId, setAssigningSectionId] = useState<string | null>(null);
   const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
+  const [addingSectionCourseId, setAddingSectionCourseId] = useState<string | null>(null);
+  const [removingSectionId, setRemovingSectionId] = useState<string | null>(null);
+  const [sectionDrafts, setSectionDrafts] = useState<Record<string, string>>({});
 
   const [form, setForm] = useState({
     code: "",
@@ -68,7 +79,7 @@ export default function AdminCoursesPage() {
     semester: "1",
     prerequisite: "",
     maxCapacity: "40",
-    instructorId: "",
+    sections: "",
   });
 
   useEffect(() => {
@@ -132,7 +143,7 @@ export default function AdminCoursesPage() {
       semester: "1",
       prerequisite: "",
       maxCapacity: "40",
-      instructorId: "",
+      sections: "",
     });
   };
 
@@ -181,30 +192,51 @@ export default function AdminCoursesPage() {
     }
   };
 
-  const handleAssignInstructor = async (course: CourseRecord, instructorId: string | null) => {
-    if (assigningCourseId) {
+  const handleAssignSectionInstructor = async (
+    course: CourseRecord,
+    section: CourseSectionRecord,
+    instructorId: string | null
+  ) => {
+    if (assigningSectionId) {
       return;
     }
 
     try {
-      setAssigningCourseId(course.id);
-      const response = await fetch(`/api/admin/courses/${course.id}`, {
+      setAssigningSectionId(section.id);
+      const response = await fetch(`/api/admin/courses/${course.id}/sections/${section.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ instructorId }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(result?.message ?? "Unable to update instructor assignment");
+        throw new Error(result?.message ?? "Unable to update section");
       }
-      updateCourseState(result.course);
-      const assignedInstructor = result.course.instructor;
+
+      const updatedSection: CourseSectionRecord = result.section;
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              courses: prev.courses.map((item) =>
+                item.id === course.id
+                  ? {
+                      ...item,
+                      sections: item.sections
+                        .map((entry) => (entry.id === section.id ? updatedSection : entry))
+                        .sort((a, b) => a.name.localeCompare(b.name)),
+                    }
+                  : item
+              ),
+            }
+          : prev
+      );
+
       toast({
-        title: "Instructor updated",
-        description:
-          instructorId && assignedInstructor
-            ? `${course.code} assigned to ${assignedInstructor.firstName} ${assignedInstructor.lastName}.`
-            : `${course.code} is now unassigned.`,
+        title: "Section updated",
+        description: updatedSection.instructor
+          ? `${updatedSection.name} assigned to ${updatedSection.instructor.firstName} ${updatedSection.instructor.lastName}.`
+          : `${updatedSection.name} is now unassigned.`,
       });
     } catch (err: any) {
       toast({
@@ -213,7 +245,131 @@ export default function AdminCoursesPage() {
         variant: "destructive",
       });
     } finally {
-      setAssigningCourseId(null);
+      setAssigningSectionId(null);
+    }
+  };
+
+  const handleSectionDraftChange = (courseId: string, value: string) => {
+    setSectionDrafts((prev) => ({ ...prev, [courseId]: value }));
+  };
+
+  const handleAddSection = async (course: CourseRecord) => {
+    if (addingSectionCourseId) {
+      return;
+    }
+
+    const draft = sectionDrafts[course.id]?.trim() ?? "";
+    if (!draft) {
+      toast({
+        title: "Section name required",
+        description: "Provide a section label before adding it.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const duplicate = course.sections.some((section) => section.name.toLowerCase() === draft.toLowerCase());
+    if (duplicate) {
+      toast({
+        title: "Section already exists",
+        description: `${draft} is already linked to this course.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setAddingSectionCourseId(course.id);
+      const response = await fetch(`/api/admin/courses/${course.id}/sections`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: draft }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result?.message ?? "Unable to add section");
+      }
+
+      const newSection: CourseSectionRecord | undefined = result.section;
+      if (!newSection || !newSection.id || !newSection.name) {
+        throw new Error("Invalid section response");
+      }
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              courses: prev.courses.map((item) =>
+                item.id === course.id
+                  ? {
+                      ...item,
+                      sections: [...item.sections, newSection].sort((a, b) =>
+                        a.name.localeCompare(b.name)
+                      ),
+                    }
+                  : item
+              ),
+            }
+          : prev
+      );
+      setSectionDrafts((prev) => ({ ...prev, [course.id]: "" }));
+      toast({ title: "Section added", description: `${draft} now appears under ${course.code}.` });
+    } catch (err: any) {
+      toast({
+        title: "Unable to add section",
+        description: err?.message ?? "Unexpected error",
+        variant: "destructive",
+      });
+    } finally {
+      setAddingSectionCourseId(null);
+    }
+  };
+
+  const handleRemoveSection = async (course: CourseRecord, section: CourseSectionRecord) => {
+    if (removingSectionId) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Remove ${section.name} from ${course.code}? This will detach the section from the course.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setRemovingSectionId(section.id);
+      const response = await fetch(`/api/admin/courses/${course.id}/sections/${section.id}`, {
+        method: "DELETE",
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result?.message ?? "Unable to remove section");
+      }
+
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              courses: prev.courses.map((item) =>
+                item.id === course.id
+                  ? {
+                      ...item,
+                      sections: item.sections.filter((entry) => entry.id !== section.id),
+                    }
+                  : item
+              ),
+            }
+          : prev
+      );
+      toast({ title: "Section removed", description: `${section.name} is no longer linked to ${course.code}.` });
+    } catch (err: any) {
+      toast({
+        title: "Unable to remove section",
+        description: err?.message ?? "Unexpected error",
+        variant: "destructive",
+      });
+    } finally {
+      setRemovingSectionId(null);
     }
   };
 
@@ -273,7 +429,10 @@ export default function AdminCoursesPage() {
       semester: Number(form.semester) || 1,
       prerequisite: form.prerequisite.trim() || null,
       maxCapacity: Number(form.maxCapacity) || 40,
-      instructorId: form.instructorId || null,
+      sections: form.sections
+        .split(",")
+        .map((value) => value.trim())
+        .filter((value, index, array) => value.length > 0 && array.indexOf(value) === index),
     };
 
     if (!payload.code || !payload.title || payload.creditHours <= 0) {
@@ -454,30 +613,14 @@ export default function AdminCoursesPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm text-gray-300 flex items-center gap-2">
-                  Assign Instructor
-                  <span className="text-xs text-gray-500">Optional</span>
-                </label>
-                <Select
-                  value={form.instructorId || "__none__"}
-                  onValueChange={(value) =>
-                    handleInputChange("instructorId", value === "__none__" ? "" : value)
-                  }
-                >
-                  <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
-                    <SelectValue placeholder="Select instructor" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-900 border-gray-800 max-h-64 overflow-y-auto">
-                    <SelectItem value="__none__" className="text-gray-400">
-                      Unassigned
-                    </SelectItem>
-                    {data?.instructors.map((instructor) => (
-                      <SelectItem key={instructor.id} value={instructor.id} className="text-white">
-                        {instructor.fullName} · {instructor.employeeId ?? "Faculty"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <label className="text-sm text-gray-300">Sections</label>
+                <Input
+                  value={form.sections}
+                  onChange={(event) => handleInputChange("sections", event.target.value)}
+                  placeholder="Section A, Section B"
+                  className="bg-gray-800 border-gray-700 text-white"
+                />
+                <p className="text-xs text-gray-500">Use commas to add multiple sections in one go.</p>
               </div>
 
               <div className="flex items-center justify-end gap-3">
@@ -540,30 +683,96 @@ export default function AdminCoursesPage() {
                       <span>Semester {course.semester}</span>
                       <span>|</span>
                       <span>Capacity {course.maxCapacity}</span>
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-gray-400">Instructor</span>
-                        <Select
-                          value={course.instructor?.id ?? "__none__"}
-                          onValueChange={(value) =>
-                            handleAssignInstructor(course, value === "__none__" ? null : value)
-                          }
-                          disabled={assigningCourseId === course.id}
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        Sections
+                      </p>
+                      {course.sections.length ? (
+                        <div className="space-y-2">
+                          {course.sections.map((section) => (
+                            <div
+                              key={section.id}
+                              className="flex flex-wrap items-center gap-2 rounded-md bg-gray-900/60 px-2 py-2 text-xs text-gray-200"
+                            >
+                              <span className="font-medium text-white">{section.name}</span>
+                              <Select
+                                value={section.instructor?.id ?? "__none__"}
+                                onValueChange={(value) =>
+                                  handleAssignSectionInstructor(
+                                    course,
+                                    section,
+                                    value === "__none__" ? null : value
+                                  )
+                                }
+                                disabled={assigningSectionId === section.id}
+                              >
+                                <SelectTrigger className="h-8 w-48 bg-gray-800 border-gray-700 text-white">
+                                  <SelectValue
+                                    placeholder="Assign instructor"
+                                    aria-label={`Assign instructor for ${section.name}`}
+                                  />
+                                </SelectTrigger>
+                                <SelectContent className="bg-gray-900 border-gray-800 max-h-64 overflow-y-auto">
+                                  <SelectItem value="__none__" className="text-gray-400">
+                                    Unassigned
+                                  </SelectItem>
+                                  {data?.instructors.map((instructor) => (
+                                    <SelectItem key={instructor.id} value={instructor.id} className="text-white">
+                                      {instructor.fullName}
+                                      {instructor.employeeId ? ` · ${instructor.employeeId}` : ""}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {section.instructor ? (
+                                <Badge variant="secondary" className="bg-purple-600/20 text-purple-300">
+                                  {section.instructor.firstName} {section.instructor.lastName}
+                                </Badge>
+                              ) : null}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 text-gray-400 hover:text-white"
+                                onClick={() => handleRemoveSection(course, section)}
+                                disabled={removingSectionId === section.id}
+                                aria-label={`Remove section ${section.name}`}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-500">No sections configured.</p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                          value={sectionDrafts[course.id] ?? ""}
+                          onChange={(event) => handleSectionDraftChange(course.id, event.target.value)}
+                          placeholder="e.g. Section A"
+                          className="bg-gray-800 border-gray-700 text-white max-w-xs"
+                          disabled={addingSectionCourseId === course.id}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              handleAddSection(course);
+                            }
+                          }}
+                        />
+                        <Button
+                          size="sm"
+                          className="bg-purple-600 hover:bg-purple-700 text-white"
+                          onClick={() => handleAddSection(course)}
+                          disabled={addingSectionCourseId === course.id}
                         >
-                          <SelectTrigger className="h-8 w-48 bg-gray-800 border-gray-700 text-white">
-                            <SelectValue placeholder="Assign" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-gray-900 border-gray-800 max-h-64 overflow-y-auto">
-                            <SelectItem value="__none__" className="text-gray-400">
-                              Unassigned
-                            </SelectItem>
-                            {data?.instructors.map((instructor) => (
-                              <SelectItem key={instructor.id} value={instructor.id} className="text-white">
-                                {instructor.fullName}
-                                {instructor.employeeId ? ` · ${instructor.employeeId}` : ""}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          {addingSectionCourseId === course.id ? "Adding..." : (
+                            <span className="flex items-center gap-1">
+                              <Plus className="h-3 w-3" />
+                              Add Section
+                            </span>
+                          )}
+                        </Button>
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">

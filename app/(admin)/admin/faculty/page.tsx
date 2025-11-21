@@ -17,7 +17,7 @@ interface FacultyMember {
   email: string;
   employeeId: string | null;
   department: string | null;
-  totalCourses: number;
+  totalSections: number;
   isActive: boolean;
   joinedAt: string;
 }
@@ -242,7 +242,7 @@ export default function AdminFacultyPage() {
                     </Badge>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-400">
-                    <span>Assigned courses: {member.totalCourses}</span>
+                    <span>Assigned sections: {member.totalSections}</span>
                     <span>|</span>
                     <span>Joined {new Date(member.joinedAt).toLocaleDateString()}</span>
                     <Button

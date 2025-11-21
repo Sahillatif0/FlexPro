@@ -38,11 +38,25 @@ export async function GET(request: Request) {
           maxCapacity: true,
           isActive: true,
           createdAt: true,
-          instructorId: true,
+          sections: {
+            select: {
+              id: true,
+              name: true,
+              instructor: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  employeeId: true,
+                },
+              },
+            },
+            orderBy: { name: "asc" },
+          },
         },
         orderBy: { createdAt: "desc" },
         take: limit,
-      }),
+      } as any),
       prisma.user.findMany({
         where: { role: "faculty", isActive: true },
         select: {
@@ -55,17 +69,9 @@ export async function GET(request: Request) {
       }),
     ]);
 
-    const facultyLookup = facultyMembers.reduce<Record<string, typeof facultyMembers[number]>>(
-      (acc, member) => {
-        acc[member.id] = member;
-        return acc;
-      },
-      {}
-    );
-
     return NextResponse.json({
-      courses: courseRecords.map((course) => {
-        const instructor = course.instructorId ? facultyLookup[course.instructorId] : undefined;
+      courses: (courseRecords as any[]).map((course: any) => {
+        const sections = Array.isArray(course.sections) ? (course.sections as any[]) : [];
         return {
           id: course.id,
           code: course.code,
@@ -76,14 +82,18 @@ export async function GET(request: Request) {
           maxCapacity: course.maxCapacity,
           isActive: course.isActive,
           createdAt: course.createdAt.toISOString(),
-          instructor: instructor
-            ? {
-                id: instructor.id,
-                firstName: instructor.firstName,
-                lastName: instructor.lastName,
-                employeeId: instructor.employeeId ?? null,
-              }
-            : null,
+          sections: sections.map((section: any) => ({
+            id: section.id,
+            name: section.name,
+            instructor: section.instructor
+              ? {
+                  id: section.instructor.id,
+                  firstName: section.instructor.firstName,
+                  lastName: section.instructor.lastName,
+                  employeeId: section.instructor.employeeId ?? null,
+                }
+              : null,
+          })),
         };
       }),
       instructors: facultyMembers.map((instructor) => ({
@@ -119,7 +129,7 @@ export async function POST(request: Request) {
       semester,
       prerequisite,
       maxCapacity,
-      instructorId,
+      sections,
     } = body as {
       code?: string;
       title?: string;
@@ -129,7 +139,7 @@ export async function POST(request: Request) {
       semester?: number;
       prerequisite?: string | null;
       maxCapacity?: number;
-      instructorId?: string | null;
+      sections?: string[];
     };
 
     if (!code || !title || !creditHours || !department || !semester) {
@@ -142,7 +152,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "Course code already exists" }, { status: 409 });
     }
 
-    const course = (await prisma.course.create({
+    const course = await prisma.course.create({
       data: {
         code: normalizedCode,
         title: title.trim(),
@@ -152,13 +162,46 @@ export async function POST(request: Request) {
         semester,
         prerequisite: prerequisite?.trim() ?? null,
         maxCapacity: maxCapacity ?? 40,
-        instructorId: instructorId ?? null,
-      } as any,
-    })) as any;
+      },
+    });
 
-    const instructor = course.instructorId
-      ? ((await prisma.user.findUnique({ where: { id: course.instructorId } })) as any)
-      : null;
+    const uniqueSections = Array.isArray(sections)
+      ? Array.from(
+          new Set(
+            sections
+              .map((value) => (typeof value === "string" ? value.trim() : ""))
+              .filter((value) => value.length > 0)
+          )
+        )
+      : [];
+
+    if (uniqueSections.length) {
+      await Promise.all(
+        uniqueSections.map((sectionName) =>
+          (prisma as any).courseSection.create({
+            data: {
+              courseId: course.id,
+              name: sectionName,
+            },
+          })
+        )
+      );
+    }
+
+    const sectionsForCourse = await (prisma as any).courseSection.findMany({
+      where: { courseId: course.id },
+      include: {
+        instructor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            employeeId: true,
+          },
+        },
+      },
+      orderBy: { name: "asc" },
+    });
 
     return NextResponse.json({
       message: "Course created",
@@ -172,14 +215,18 @@ export async function POST(request: Request) {
         maxCapacity: course.maxCapacity,
         isActive: course.isActive,
         createdAt: course.createdAt.toISOString(),
-        instructor: instructor
-          ? {
-              id: instructor.id,
-              firstName: instructor.firstName,
-              lastName: instructor.lastName,
-              employeeId: instructor.employeeId ?? null,
-            }
-          : null,
+        sections: (sectionsForCourse as any[]).map((section: any) => ({
+          id: section.id,
+          name: section.name,
+          instructor: section.instructor
+            ? {
+                id: section.instructor.id,
+                firstName: section.instructor.firstName,
+                lastName: section.instructor.lastName,
+                employeeId: section.instructor.employeeId ?? null,
+              }
+            : null,
+        })),
         },
       });
   } catch (error) {

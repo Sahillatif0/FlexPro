@@ -196,7 +196,7 @@ export default function FacultyMarksPage() {
 
     try {
       setIsSaving(true);
-      const entries = activeTerm.students.map((student) => {
+      const entries = activeTerm?.students?.map((student) => {
         const current = gradeEntries[student.userId] ?? { grade: "", gradePoints: "" };
         return {
           userId: student.userId,
@@ -330,11 +330,11 @@ export default function FacultyMarksPage() {
                 </div>
               ))}
             </div>
-          ) : activeTerm.students.length === 0 ? (
+          ) : activeTerm?.students?.length === 0 ? (
             <p className="text-sm text-gray-400">No students are enrolled for the selected course and term.</p>
           ) : (
             <div className="space-y-3">
-              {activeTerm.students.map((student) => {
+              {activeTerm?.students?.map((student) => {
                 const entry = gradeEntries[student.userId] ?? { grade: "", gradePoints: "" };
                 return (
                   <div

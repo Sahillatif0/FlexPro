@@ -15,7 +15,7 @@ async function requireAdminSession() {
   return { status: 200 as const };
 }
 
-function mapCourse(course: any, instructor: any | null) {
+function mapCourse(course: any, sections: any[]) {
   return {
     id: course.id,
     code: course.code,
@@ -26,14 +26,18 @@ function mapCourse(course: any, instructor: any | null) {
     maxCapacity: course.maxCapacity,
     isActive: course.isActive,
     createdAt: course.createdAt.toISOString(),
-    instructor: instructor
-      ? {
-          id: instructor.id,
-          firstName: instructor.firstName,
-          lastName: instructor.lastName,
-          employeeId: instructor.employeeId ?? null,
-        }
-      : null,
+    sections: sections.map((section: any) => ({
+      id: section.id,
+      name: section.name,
+      instructor: section.instructor
+        ? {
+            id: section.instructor.id,
+            firstName: section.instructor.firstName,
+            lastName: section.instructor.lastName,
+            employeeId: section.instructor.employeeId ?? null,
+          }
+        : null,
+    })),
   };
 }
 
@@ -80,9 +84,6 @@ export async function PATCH(request: Request, { params }: { params: { courseId: 
     if (typeof payload.isActive === "boolean") {
       data.isActive = payload.isActive;
     }
-    if ("instructorId" in payload) {
-      data.instructorId = payload.instructorId || null;
-    }
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ message: "No valid fields provided" }, { status: 400 });
@@ -93,11 +94,22 @@ export async function PATCH(request: Request, { params }: { params: { courseId: 
       data: data as any,
     })) as any;
 
-    const instructor = course.instructorId
-      ? ((await prisma.user.findUnique({ where: { id: course.instructorId } })) as any)
-      : null;
+    const sections = await (prisma as any).courseSection.findMany({
+      where: { courseId },
+      include: {
+        instructor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            employeeId: true,
+          },
+        },
+      },
+      orderBy: { name: "asc" },
+    });
 
-    return NextResponse.json({ message: "Course updated", course: mapCourse(course, instructor) });
+    return NextResponse.json({ message: "Course updated", course: mapCourse(course, sections) });
   } catch (error) {
     console.error("Admin update course error", error);
     return NextResponse.json({ message: "Unable to update course" }, { status: 500 });
