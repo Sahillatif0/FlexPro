@@ -58,12 +58,15 @@ export default function FacultyStudentNotesPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
 
     async function loadCourses() {
       setIsLoadingCourses(true);
       setError(null);
       try {
-        const response = await fetch("/api/faculty/teaching");
+        const response = await fetch("/api/faculty/teaching", {
+          signal: controller.signal,
+        });
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
           throw new Error(payload?.message ?? "Failed to load teaching assignments");
@@ -81,6 +84,9 @@ export default function FacultyStudentNotesPage() {
           }
         }
       } catch (err: any) {
+        if (err?.name === "AbortError") {
+          return;
+        }
         if (!cancelled) {
           setError(err?.message ?? "Unexpected error");
         }
@@ -94,6 +100,7 @@ export default function FacultyStudentNotesPage() {
     loadCourses();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, []);
 
@@ -119,6 +126,7 @@ export default function FacultyStudentNotesPage() {
     }
 
     let cancelled = false;
+    const controller = new AbortController();
 
     async function loadNotes() {
       setIsLoadingNotes(true);
@@ -131,7 +139,9 @@ export default function FacultyStudentNotesPage() {
           courseId: selectedCourseId,
           termId: selectedTermId,
         });
-        const response = await fetch(`/api/faculty/student-notes?${params.toString()}`);
+        const response = await fetch(`/api/faculty/student-notes?${params.toString()}`, {
+          signal: controller.signal,
+        });
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
           throw new Error(payload?.message ?? "Failed to load student notes");
@@ -141,6 +151,9 @@ export default function FacultyStudentNotesPage() {
           setNotes(payload.notes);
         }
       } catch (err: any) {
+        if (err?.name === "AbortError") {
+          return;
+        }
         if (!cancelled) {
           setError(err?.message ?? "Unexpected error");
         }
@@ -154,6 +167,7 @@ export default function FacultyStudentNotesPage() {
     loadNotes();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [selectedStudentId, selectedCourseId, selectedTermId]);
 

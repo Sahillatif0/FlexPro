@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FacultySidebar } from '@/components/layout/faculty-sidebar';
-import { FacultyTopbar } from '@/components/layout/faculty-topbar';
 import { useAppStore } from '@/store';
+import { AdminSidebar } from '@/components/layout/admin-sidebar';
+import { AdminTopbar } from '@/components/layout/admin-topbar';
 
-export default function FacultyPortalLayout({
+export default function AdminPortalLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -84,12 +84,12 @@ export default function FacultyPortalLayout({
       return;
     }
 
-    if (user?.role === 'admin') {
-      router.replace('/admin/dashboard');
+    if (user?.role === 'faculty') {
+      router.replace('/faculty/dashboard');
       return;
     }
 
-    if (user && user.role !== 'faculty') {
+    if (user && user.role !== 'admin') {
       router.replace('/dashboard');
     }
   }, [hasHydrated, isCheckingSession, isAuthenticated, router, user]);
@@ -97,20 +97,20 @@ export default function FacultyPortalLayout({
   if (!hasHydrated) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-950 text-gray-300">
-        Loading faculty portal...
+        Loading admin portal...
       </div>
     );
   }
 
-  if (!isAuthenticated || isCheckingSession || !user || user.role !== 'faculty') {
+  if (!isAuthenticated || isCheckingSession || !user || user.role !== 'admin') {
     return null;
   }
 
   return (
     <div className="flex h-screen bg-gray-950">
-      <FacultySidebar />
+      <AdminSidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <FacultyTopbar />
+        <AdminTopbar />
         <main className="flex-1 overflow-y-auto p-6">
           <div className="animate-fade-in">{children}</div>
         </main>

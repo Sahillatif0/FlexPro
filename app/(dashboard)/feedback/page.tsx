@@ -69,14 +69,16 @@ export default function FeedbackPage() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchFeedback = useCallback(
-    async () => {
+    async (signal?: AbortSignal) => {
       if (!user) return;
       setIsLoading(true);
       setError(null);
 
       try {
         const params = new URLSearchParams({ userId: user.id });
-        const response = await fetch(`/api/feedback?${params.toString()}`);
+        const response = await fetch(`/api/feedback?${params.toString()}`, {
+          signal,
+        });
 
         if (!response.ok) {
           const result = await response.json().catch(() => ({}));
@@ -89,10 +91,14 @@ export default function FeedbackPage() {
           summary: FeedbackSummary;
         };
 
+        if (signal?.aborted) {
+          return;
+        }
         setPendingFeedback(payload.pendingFeedback);
         setSubmittedFeedback(payload.submittedFeedback);
         setSummary(payload.summary);
       } catch (err: any) {
+        if (err.name === 'AbortError') return;
         console.error('Feedback fetch error', err);
         setError(err.message || 'Failed to load feedback data');
         toast({
@@ -100,6 +106,9 @@ export default function FeedbackPage() {
           description: err.message || 'Please try again later.',
         });
       } finally {
+        if (signal?.aborted) {
+          return;
+        }
         setIsLoading(false);
       }
     },
@@ -107,7 +116,9 @@ export default function FeedbackPage() {
   );
 
   useEffect(() => {
-    fetchFeedback();
+    const controller = new AbortController();
+    fetchFeedback(controller.signal);
+    return () => controller.abort();
   }, [fetchFeedback]);
 
   useEffect(() => {

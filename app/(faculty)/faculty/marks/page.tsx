@@ -68,12 +68,15 @@ export default function FacultyMarksPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
 
     async function loadCourses() {
       setIsLoadingCourses(true);
       setError(null);
       try {
-        const response = await fetch("/api/faculty/teaching");
+        const response = await fetch("/api/faculty/teaching", {
+          signal: controller.signal,
+        });
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
           throw new Error(payload?.message ?? "Failed to load teaching assignments");
@@ -90,6 +93,9 @@ export default function FacultyMarksPage() {
           }
         }
       } catch (err: any) {
+        if (err?.name === "AbortError") {
+          return;
+        }
         if (!cancelled) {
           setError(err?.message ?? "Unexpected error");
         }
@@ -103,6 +109,7 @@ export default function FacultyMarksPage() {
     loadCourses();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, []);
 
@@ -124,6 +131,7 @@ export default function FacultyMarksPage() {
     }
 
     let cancelled = false;
+    const controller = new AbortController();
 
     async function loadGrades() {
       setIsLoadingGrades(true);
@@ -132,7 +140,9 @@ export default function FacultyMarksPage() {
           courseId: selectedCourseId,
           termId: selectedTermId,
         });
-        const response = await fetch(`/api/faculty/marks?${params.toString()}`);
+        const response = await fetch(`/api/faculty/marks?${params.toString()}`, {
+          signal: controller.signal,
+        });
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
           throw new Error(payload?.message ?? "Failed to load gradebook");
@@ -149,6 +159,9 @@ export default function FacultyMarksPage() {
           setGradeEntries(nextEntries);
         }
       } catch (err: any) {
+        if (err?.name === "AbortError") {
+          return;
+        }
         if (!cancelled) {
           setError(err?.message ?? "Unexpected error");
         }
@@ -162,6 +175,7 @@ export default function FacultyMarksPage() {
     loadGrades();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [selectedCourseId, selectedTermId]);
 

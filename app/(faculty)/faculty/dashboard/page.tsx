@@ -45,12 +45,15 @@ export default function FacultyDashboardPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
 
     async function loadDashboard() {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch("/api/faculty/dashboard");
+        const response = await fetch("/api/faculty/dashboard", {
+          signal: controller.signal,
+        });
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
           throw new Error(payload?.message ?? "Failed to load dashboard data");
@@ -60,6 +63,9 @@ export default function FacultyDashboardPage() {
           setData(payload);
         }
       } catch (err: any) {
+        if (err?.name === "AbortError") {
+          return;
+        }
         if (!cancelled) {
           setError(err?.message ?? "Unexpected error");
         }
@@ -73,6 +79,7 @@ export default function FacultyDashboardPage() {
     loadDashboard();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, []);
 

@@ -50,12 +50,15 @@ export default function FacultyAttendancePage() {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
 
     async function loadCourses() {
       setIsLoadingCourses(true);
       setError(null);
       try {
-        const response = await fetch("/api/faculty/teaching");
+        const response = await fetch("/api/faculty/teaching", {
+          signal: controller.signal,
+        });
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
           throw new Error(payload?.message ?? "Failed to load teaching assignments");
@@ -72,6 +75,9 @@ export default function FacultyAttendancePage() {
           }
         }
       } catch (err: any) {
+        if (err?.name === "AbortError") {
+          return;
+        }
         if (!cancelled) {
           setError(err?.message ?? "Unexpected error");
         }
@@ -85,6 +91,7 @@ export default function FacultyAttendancePage() {
     loadCourses();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, []);
 
@@ -104,6 +111,7 @@ export default function FacultyAttendancePage() {
     }
 
     let cancelled = false;
+    const controller = new AbortController();
 
     async function loadAttendance() {
       setIsLoadingAttendance(true);
@@ -113,7 +121,9 @@ export default function FacultyAttendancePage() {
           termId: selectedTermId,
           date: selectedDate,
         });
-        const response = await fetch(`/api/faculty/attendance?${params.toString()}`);
+        const response = await fetch(`/api/faculty/attendance?${params.toString()}`, {
+          signal: controller.signal,
+        });
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
           throw new Error(payload?.message ?? "Failed to load attendance details");
@@ -127,6 +137,9 @@ export default function FacultyAttendancePage() {
           setAttendanceMap(nextMap);
         }
       } catch (err: any) {
+        if (err?.name === "AbortError") {
+          return;
+        }
         if (!cancelled) {
           setError(err?.message ?? "Unexpected error");
         }
@@ -140,6 +153,7 @@ export default function FacultyAttendancePage() {
     loadAttendance();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [selectedCourseId, selectedTermId, selectedDate]);
 

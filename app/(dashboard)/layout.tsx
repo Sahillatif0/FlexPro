@@ -82,8 +82,14 @@ export default function DashboardLayout({
   }, [hasHydrated, isAuthenticated, isCheckingSession, router]);
 
   useEffect(() => {
-    if (hasHydrated && user?.role === 'faculty') {
+    if (!hasHydrated || !user) {
+      return;
+    }
+
+    if (user.role === 'faculty') {
       router.replace('/faculty/dashboard');
+    } else if (user.role === 'admin') {
+      router.replace('/admin/dashboard');
     }
   }, [hasHydrated, router, user]);
 

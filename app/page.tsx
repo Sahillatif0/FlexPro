@@ -53,7 +53,14 @@ export default function LoginPage() {
         title: 'Welcome back!',
         description: `Signed in as ${result.user.firstName} ${result.user.lastName}`,
       });
-      const destination = result.user.role === 'faculty' ? '/faculty/dashboard' : '/dashboard';
+
+      const destination =
+        result.user.role === 'faculty'
+          ? '/faculty/dashboard'
+          : result.user.role === 'admin'
+          ? '/admin/dashboard'
+          : '/dashboard';
+
       router.push(destination);
     } catch (error) {
       console.error('Login error', error);

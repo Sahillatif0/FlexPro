@@ -19,6 +19,7 @@ model User {
   role       String   @default("student")
   program    String
   semester   Int      @default(1)
+  section    String   @default("A")
   cgpa       Float    @default(0.0)
   bio        String?
   phone      String?
@@ -42,6 +43,9 @@ model User {
   studentNotes    StudentNote[]  @relation("StudentNotes")
 
   @@map("users")
+
+  @@index([role])
+  @@index([role, isActive])
 }
 
 model Course {
@@ -84,6 +88,7 @@ model Enrollment {
 
   @@unique([userId, courseId, termId])
   @@map("enrollments")
+  @@index([enrolledAt])
 }
 
 model Term {
@@ -224,6 +229,8 @@ model GradeRequest {
   term Term @relation(fields: [termId], references: [id])
 
   @@map("grade_requests")
+  @@index([status])
+  @@index([submittedAt])
 }
 
 model StudyPlan {

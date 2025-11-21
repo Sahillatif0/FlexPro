@@ -53,6 +53,7 @@ async function main() {
       role: 'student',
       program: 'BS Computer Science',
       semester: 6,
+      section: 'BCS-23A',
       cgpa: 3.45,
       bio: 'Passionate computer science student with interests in web development and AI.',
       phone: '+92-300-1234567',
@@ -68,11 +69,12 @@ async function main() {
       role: 'student',
       program: 'BS Computer Science',
       semester: 6,
+      section: 'BCS-23A',
       cgpa: 3.45,
       bio: 'Passionate computer science student with interests in web development and AI.',
       phone: '+92-300-1234567',
       address: 'Karachi, Pakistan',
-    },
+    } as any,
   });
 
   const facultyPassword = await bcrypt.hash('faculty123', 10);
@@ -105,6 +107,40 @@ async function main() {
       cgpa: 0,
       bio: 'Senior lecturer responsible for core CS courses and student mentorship.',
       phone: '+92-300-7654321',
+      address: 'Karachi, Pakistan',
+    } as any,
+  });
+
+  const adminPassword = await bcrypt.hash('admin123', 10);
+  const admin = await prisma.user.upsert({
+    where: { studentId: 'ADM-0001' },
+    update: {
+      email: 'admin@flexpro.edu',
+      firstName: 'System',
+      lastName: 'Administrator',
+      role: 'admin',
+      employeeId: 'ADM-0001',
+      program: 'Administration',
+      semester: 0,
+      cgpa: 0,
+      bio: 'Platform administrator overseeing campus-wide operations.',
+      phone: '+92-300-0000000',
+      address: 'Karachi, Pakistan',
+      password: adminPassword,
+    } as any,
+    create: {
+      email: 'admin@flexpro.edu',
+      password: adminPassword,
+      firstName: 'System',
+      lastName: 'Administrator',
+      studentId: 'ADM-0001',
+      employeeId: 'ADM-0001',
+      role: 'admin',
+      program: 'Administration',
+      semester: 0,
+      cgpa: 0,
+      bio: 'Platform administrator overseeing campus-wide operations.',
+      phone: '+92-300-0000000',
       address: 'Karachi, Pakistan',
     } as any,
   });
