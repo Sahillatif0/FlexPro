@@ -75,6 +75,40 @@ async function main() {
     },
   });
 
+  const facultyPassword = await bcrypt.hash('faculty123', 10);
+  const faculty = await prisma.user.upsert({
+    where: { studentId: 'FAC-1001' },
+    update: {
+      email: 'ayesha.khan@flexpro.edu',
+      firstName: 'Ayesha',
+      lastName: 'Khan',
+      role: 'faculty',
+      employeeId: 'EMP-1001',
+      program: 'Faculty of Computing',
+      semester: 0,
+      cgpa: 0,
+      bio: 'Senior lecturer responsible for core CS courses and student mentorship.',
+      phone: '+92-300-7654321',
+      address: 'Karachi, Pakistan',
+      password: facultyPassword,
+    } as any,
+    create: {
+      email: 'ayesha.khan@flexpro.edu',
+      password: facultyPassword,
+      firstName: 'Ayesha',
+      lastName: 'Khan',
+      studentId: 'FAC-1001',
+      employeeId: 'EMP-1001',
+      role: 'faculty',
+      program: 'Faculty of Computing',
+      semester: 0,
+      cgpa: 0,
+      bio: 'Senior lecturer responsible for core CS courses and student mentorship.',
+      phone: '+92-300-7654321',
+      address: 'Karachi, Pakistan',
+    } as any,
+  });
+
   const courseInputs = [
     {
       code: 'CS-401',
@@ -304,6 +338,12 @@ async function main() {
     {}
   );
 
+  const taughtCourseCodes = ['CS-401', 'CS-403', 'CS-405', 'CS-407', 'CS-409'];
+  await prisma.course.updateMany({
+    where: { code: { in: taughtCourseCodes } },
+    data: { instructorId: faculty.id } as any,
+  });
+
   const activeEnrollmentCodes = ['CS-401', 'CS-403', 'CS-405'];
   for (const code of activeEnrollmentCodes) {
     const course = courseByCode[code];
@@ -395,6 +435,56 @@ async function main() {
       },
     });
   }
+
+  await (prisma as any).studentNote.upsert({
+    where: {
+      facultyId_studentId_courseId_termId_title: {
+        facultyId: faculty.id,
+        studentId: user.id,
+        courseId: courseByCode['CS-401'].id,
+        termId: fallTerm.id,
+        title: 'Class Participation',
+      },
+    },
+    update: {
+      content:
+        'Student shows consistent participation and often volunteers for problem-solving sessions.',
+    },
+    create: {
+      facultyId: faculty.id,
+      studentId: user.id,
+      courseId: courseByCode['CS-401'].id,
+      termId: fallTerm.id,
+      title: 'Class Participation',
+      content:
+        'Student shows consistent participation and often volunteers for problem-solving sessions.',
+    },
+  });
+
+  await (prisma as any).studentNote.upsert({
+    where: {
+      facultyId_studentId_courseId_termId_title: {
+        facultyId: faculty.id,
+        studentId: user.id,
+        courseId: courseByCode['CS-403'].id,
+        termId: fallTerm.id,
+        title: 'Project Guidance',
+      },
+    },
+    update: {
+      content:
+        'Guided student on database normalization project; student needs to focus on documentation clarity.',
+    },
+    create: {
+      facultyId: faculty.id,
+      studentId: user.id,
+      courseId: courseByCode['CS-403'].id,
+      termId: fallTerm.id,
+      title: 'Project Guidance',
+      content:
+        'Guided student on database normalization project; student needs to focus on documentation clarity.',
+    },
+  });
 
   await prisma.feedback.upsert({
     where: {

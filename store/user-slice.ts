@@ -6,6 +6,7 @@ export interface User {
   firstName: string;
   lastName: string;
   studentId: string;
+  employeeId?: string | null;
   role: string;
   program: string;
   semester: number;

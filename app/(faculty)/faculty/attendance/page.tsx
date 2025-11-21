@@ -1,0 +1,349 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
+
+interface TeachingStudent {
+  userId: string;
+  studentId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
+interface TeachingTerm {
+  termId: string;
+  termName: string;
+  students: TeachingStudent[];
+}
+
+interface TeachingCourse {
+  courseId: string;
+  code: string;
+  title: string;
+  terms: TeachingTerm[];
+}
+
+interface AttendanceRecord {
+  userId: string;
+  status: "present" | "absent" | "late";
+}
+
+export default function FacultyAttendancePage() {
+  const { toast } = useToast();
+  const [courses, setCourses] = useState<TeachingCourse[]>([]);
+  const [isLoadingCourses, setIsLoadingCourses] = useState(true);
+  const [selectedCourseId, setSelectedCourseId] = useState<string>("");
+  const [selectedTermId, setSelectedTermId] = useState<string>("");
+  const [selectedDate, setSelectedDate] = useState<string>(
+    new Date().toISOString().slice(0, 10)
+  );
+  const [attendanceMap, setAttendanceMap] = useState<Record<string, AttendanceRecord["status"]>>({});
+  const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCourses() {
+      setIsLoadingCourses(true);
+      setError(null);
+      try {
+        const response = await fetch("/api/faculty/teaching");
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload?.message ?? "Failed to load teaching assignments");
+        }
+        const payload: { courses: TeachingCourse[] } = await response.json();
+        if (!cancelled) {
+          setCourses(payload.courses);
+          if (payload.courses.length) {
+            setSelectedCourseId(payload.courses[0].courseId);
+            const firstTerm = payload.courses[0].terms[0];
+            if (firstTerm) {
+              setSelectedTermId(firstTerm.termId);
+            }
+          }
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err?.message ?? "Unexpected error");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingCourses(false);
+        }
+      }
+    }
+
+    loadCourses();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const activeCourse = useMemo(
+    () => courses.find((course) => course.courseId === selectedCourseId),
+    [courses, selectedCourseId]
+  );
+
+  const activeTerm = useMemo(() => {
+    if (!activeCourse) return undefined;
+    return activeCourse.terms.find((term) => term.termId === selectedTermId);
+  }, [activeCourse, selectedTermId]);
+
+  useEffect(() => {
+    if (!selectedCourseId || !selectedTermId || !selectedDate) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadAttendance() {
+      setIsLoadingAttendance(true);
+      try {
+        const params = new URLSearchParams({
+          courseId: selectedCourseId,
+          termId: selectedTermId,
+          date: selectedDate,
+        });
+        const response = await fetch(`/api/faculty/attendance?${params.toString()}`);
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload?.message ?? "Failed to load attendance details");
+        }
+        const payload: { records: AttendanceRecord[] } = await response.json();
+        if (!cancelled) {
+          const nextMap: Record<string, AttendanceRecord["status"]> = {};
+          payload.records.forEach((record) => {
+            nextMap[record.userId] = record.status;
+          });
+          setAttendanceMap(nextMap);
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err?.message ?? "Unexpected error");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingAttendance(false);
+        }
+      }
+    }
+
+    loadAttendance();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCourseId, selectedTermId, selectedDate]);
+
+  const handleStatusChange = (studentId: string, status: AttendanceRecord["status"]) => {
+    setAttendanceMap((prev) => ({ ...prev, [studentId]: status }));
+  };
+
+  const handleSave = async () => {
+    if (!selectedCourseId || !selectedTermId || !selectedDate || !activeTerm) {
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const entries = activeTerm.students.map((student) => ({
+        userId: student.userId,
+        status: attendanceMap[student.userId] ?? "absent",
+      }));
+
+      const response = await fetch("/api/faculty/attendance", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          courseId: selectedCourseId,
+          termId: selectedTermId,
+          date: selectedDate,
+          entries,
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload?.message ?? "Failed to save attendance");
+      }
+
+      toast({
+        title: "Attendance saved",
+        description: payload?.message ?? "Attendance sheet updated successfully.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Unable to save attendance",
+        description: err?.message ?? "Unexpected error",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-2xl font-semibold text-white">Record Attendance</h1>
+        <p className="text-sm text-gray-400">
+          Select a course, term, and session date to capture student attendance.
+        </p>
+      </div>
+
+      {error ? (
+        <Card className="bg-red-500/10 border-red-500/40">
+          <CardContent className="p-4 text-sm text-red-200">{error}</CardContent>
+        </Card>
+      ) : null}
+
+      <Card className="bg-gray-900 border-gray-800">
+        <CardHeader>
+          <CardTitle className="text-white">Session Details</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isLoadingCourses ? (
+            <div className="grid gap-4 md:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <Skeleton key={index} className="h-10 bg-gray-800" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <label className="text-sm text-gray-300">Course</label>
+                <Select
+                  value={selectedCourseId}
+                  onValueChange={(value) => {
+                    setSelectedCourseId(value);
+                    const course = courses.find((item) => item.courseId === value);
+                    const firstTerm = course?.terms[0];
+                    setSelectedTermId(firstTerm ? firstTerm.termId : "");
+                  }}
+                >
+                  <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                    <SelectValue placeholder="Choose course" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-900 border-gray-800">
+                    {courses.map((course) => (
+                      <SelectItem key={course.courseId} value={course.courseId} className="text-white">
+                        {course.code} · {course.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm text-gray-300">Term</label>
+                <Select value={selectedTermId} onValueChange={setSelectedTermId}>
+                  <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                    <SelectValue placeholder="Choose term" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-900 border-gray-800">
+                    {activeCourse?.terms.map((term) => (
+                      <SelectItem key={term.termId} value={term.termId} className="text-white">
+                        {term.termName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm text-gray-300">Session Date</label>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(event) => setSelectedDate(event.target.value)}
+                  className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none"
+                  max={new Date().toISOString().slice(0, 10)}
+                />
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="bg-gray-900 border-gray-800">
+        <CardHeader>
+          <CardTitle className="text-white">Student Attendance</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isLoadingCourses || !activeTerm ? (
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <div key={index} className="grid grid-cols-4 items-center gap-4">
+                  <Skeleton className="h-5 bg-gray-800 col-span-2" />
+                  <Skeleton className="h-8 w-full bg-gray-800 col-span-2" />
+                </div>
+              ))}
+            </div>
+          ) : activeTerm.students.length === 0 ? (
+            <p className="text-sm text-gray-400">No students are enrolled for the selected course and term.</p>
+          ) : (
+            <div className="space-y-3">
+              {activeTerm.students.map((student) => {
+                const status = attendanceMap[student.userId] ?? "absent";
+                return (
+                  <div
+                    key={student.userId}
+                    className="grid grid-cols-1 md:grid-cols-[2fr,1fr] items-center gap-4 rounded-lg bg-gray-800/60 p-4"
+                  >
+                    <div>
+                      <p className="text-white font-medium">
+                        {student.firstName} {student.lastName}
+                      </p>
+                      <p className="text-xs text-gray-400">{student.studentId}</p>
+                      <p className="text-xs text-gray-500">{student.email}</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {[
+                        { value: "present", label: "Present", color: "bg-emerald-500/20 text-emerald-400" },
+                        { value: "absent", label: "Absent", color: "bg-red-500/20 text-red-400" },
+                        { value: "late", label: "Late", color: "bg-amber-500/20 text-amber-400" },
+                      ].map((option) => (
+                        <Button
+                          key={option.value}
+                          type="button"
+                          onClick={() => handleStatusChange(student.userId, option.value as AttendanceRecord["status"])}
+                          className={`h-9 ${status === option.value ? option.color : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}
+                        >
+                          {option.label}
+                        </Button>
+                      ))}
+                      <Badge variant="secondary" className="bg-gray-700/60 text-gray-300">
+                        {status.toUpperCase()}
+                      </Badge>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button
+          onClick={handleSave}
+          disabled={isSaving || isLoadingAttendance || !activeTerm}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+        >
+          {isSaving ? "Saving..." : "Save Attendance"}
+        </Button>
+      </div>
+    </div>
+  );
+}

@@ -8,6 +8,7 @@ export interface User {
   firstName: string;
   lastName: string;
   studentId: string;
+  employeeId?: string | null;
   role: string;
   program: string;
   semester: number;
@@ -51,6 +52,7 @@ function toPublicUser(user: any): User {
     firstName: user.firstName,
     lastName: user.lastName,
     studentId: user.studentId,
+    employeeId: user.employeeId ?? null,
     role: user.role,
     program: user.program,
     semester: user.semester,

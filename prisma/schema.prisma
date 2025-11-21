@@ -3,39 +3,43 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  firstName String
-  lastName  String
-  studentId String   @unique
-  role      String   @default("student")
-  program   String
-  semester  Int      @default(1)
-  cgpa      Float    @default(0.0)
-  bio       String?
-  phone     String?
-  address   String?
-  avatar    String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  email      String   @unique
+  password   String
+  firstName  String
+  lastName   String
+  studentId  String   @unique
+  employeeId String?  @unique
+  role       String   @default("student")
+  program    String
+  semester   Int      @default(1)
+  cgpa       Float    @default(0.0)
+  bio        String?
+  phone      String?
+  address    String?
+  avatar     String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  enrollments   Enrollment[]
-  transcripts   Transcript[]
-  attendances   Attendance[]
-  notifications Notification[]
-  feeInvoices   FeeInvoice[]
-  feePayments   FeePayment[]
-  feedbacks     Feedback[]
-  gradeRequests GradeRequest[]
-  studyPlans    StudyPlan[]
+  enrollments     Enrollment[]
+  transcripts     Transcript[]
+  attendances     Attendance[]
+  notifications   Notification[]
+  feeInvoices     FeeInvoice[]
+  feePayments     FeePayment[]
+  feedbacks       Feedback[]
+  gradeRequests   GradeRequest[]
+  studyPlans      StudyPlan[]
+  teachingCourses Course[]       @relation("CourseInstructor")
+  facultyNotes    StudentNote[]  @relation("FacultyNotes")
+  studentNotes    StudentNote[]  @relation("StudentNotes")
 
   @@map("users")
 }
@@ -53,12 +57,15 @@ model Course {
   maxCapacity  Int      @default(50)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  instructorId String?
 
   enrollments    Enrollment[]
   transcripts    Transcript[]
   attendances    Attendance[]
   feedbacks      Feedback[]
   studyPlanItems StudyPlanItem[]
+  instructor     User?           @relation("CourseInstructor", fields: [instructorId], references: [id])
+  notes          StudentNote[]
 
   @@map("courses")
 }
@@ -94,6 +101,7 @@ model Term {
   feeInvoices   FeeInvoice[]
   gradeRequests GradeRequest[]
   feedbacks     Feedback[]
+  studentNotes  StudentNote[]
 
   @@map("terms")
 }
@@ -245,4 +253,24 @@ model StudyPlanItem {
 
   @@unique([studyPlanId, courseId])
   @@map("study_plan_items")
+}
+
+model StudentNote {
+  id        String   @id @default(cuid())
+  facultyId String
+  studentId String
+  courseId  String?
+  termId    String?
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  faculty User    @relation("FacultyNotes", fields: [facultyId], references: [id], onDelete: Cascade)
+  student User    @relation("StudentNotes", fields: [studentId], references: [id], onDelete: Cascade)
+  course  Course? @relation(fields: [courseId], references: [id])
+  term    Term?   @relation(fields: [termId], references: [id])
+
+  @@unique([facultyId, studentId, courseId, termId, title])
+  @@map("student_notes")
 }

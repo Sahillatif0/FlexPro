@@ -53,7 +53,8 @@ export default function LoginPage() {
         title: 'Welcome back!',
         description: `Signed in as ${result.user.firstName} ${result.user.lastName}`,
       });
-      router.push('/dashboard');
+      const destination = result.user.role === 'faculty' ? '/faculty/dashboard' : '/dashboard';
+      router.push(destination);
     } catch (error) {
       console.error('Login error', error);
       setFormError('Unexpected error occurred. Please try again.');
@@ -71,7 +72,7 @@ export default function LoginPage() {
           </div>
           <CardTitle className="text-2xl font-bold text-white">FlexPro</CardTitle>
           <CardDescription className="text-gray-400">
-            Student Portal
+            Campus Portal Access
           </CardDescription>
         </CardHeader>
         <CardContent>
