@@ -38,14 +38,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ faculty: [] });
     }
 
-    const courseAssignments = (await prisma.course.findMany({
-      where: { instructorId: { in: facultyIds } } as any,
-      select: { instructorId: true } as any,
+    const sectionAssignments = (await (prisma as any).courseSection.findMany({
+      where: { instructorId: { in: facultyIds } },
+      select: { instructorId: true },
     })) as any[];
 
-    const countsLookup = courseAssignments.reduce<Record<string, number>>((acc, course) => {
-      if (course.instructorId) {
-        acc[course.instructorId] = (acc[course.instructorId] ?? 0) + 1;
+    const countsLookup = sectionAssignments.reduce<Record<string, number>>((acc, section) => {
+      if (section.instructorId) {
+        acc[section.instructorId] = (acc[section.instructorId] ?? 0) + 1;
       }
       return acc;
     }, {});
@@ -58,7 +58,7 @@ export async function GET(request: Request) {
         email: member.email,
         employeeId: member.employeeId ?? null,
         department: member.program ?? null,
-        totalCourses: countsLookup[member.id] ?? 0,
+        totalSections: countsLookup[member.id] ?? 0,
         isActive: member.isActive,
         joinedAt: member.createdAt.toISOString(),
       })),

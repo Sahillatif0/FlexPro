@@ -16,12 +16,19 @@ interface TeachingStudent {
   firstName: string;
   lastName: string;
   email: string;
+  sectionName: string | null;
+}
+
+interface TeachingSection {
+  sectionId: string;
+  sectionName: string;
+  students: TeachingStudent[];
 }
 
 interface TeachingTerm {
   termId: string;
   termName: string;
-  students: TeachingStudent[];
+  sections: TeachingSection[];
 }
 
 interface TeachingCourse {
@@ -46,6 +53,7 @@ export default function FacultyStudentNotesPage() {
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
   const [selectedCourseId, setSelectedCourseId] = useState<string>("");
   const [selectedTermId, setSelectedTermId] = useState<string>("");
+  const [selectedSectionId, setSelectedSectionId] = useState<string>("__all__");
   const [selectedStudentId, setSelectedStudentId] = useState<string>("");
   const [notes, setNotes] = useState<StudentNote[]>([]);
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
@@ -77,10 +85,18 @@ export default function FacultyStudentNotesPage() {
           if (payload.courses.length) {
             const firstCourse = payload.courses[0];
             const firstTerm = firstCourse.terms[0];
-            const firstStudent = firstTerm?.students[0];
             setSelectedCourseId(firstCourse.courseId);
-            setSelectedTermId(firstTerm ? firstTerm.termId : "");
-            setSelectedStudentId(firstStudent ? firstStudent.userId : "");
+            if (firstTerm) {
+              setSelectedTermId(firstTerm.termId);
+              const firstSection = firstTerm.sections[0];
+              setSelectedSectionId(firstSection ? firstSection.sectionId : "__all__");
+              const allStudents = firstTerm.sections.flatMap((section) => section.students);
+              setSelectedStudentId(allStudents[0]?.userId ?? "");
+            } else {
+              setSelectedTermId("");
+              setSelectedSectionId("__all__");
+              setSelectedStudentId("");
+            }
           }
         }
       } catch (err: any) {
@@ -114,10 +130,70 @@ export default function FacultyStudentNotesPage() {
     return activeCourse.terms.find((term) => term.termId === selectedTermId);
   }, [activeCourse, selectedTermId]);
 
-  const activeStudent = useMemo(() => {
+  const activeSection = useMemo(() => {
     if (!activeTerm) return undefined;
-    return activeTerm.students.find((student) => student.userId === selectedStudentId);
-  }, [activeTerm, selectedStudentId]);
+    if (!selectedSectionId || selectedSectionId === "__all__") return undefined;
+    return activeTerm.sections.find((section) => section.sectionId === selectedSectionId);
+  }, [activeTerm, selectedSectionId]);
+
+  const visibleStudents = useMemo(() => {
+    if (!activeTerm) return [] as TeachingStudent[];
+
+    if (selectedSectionId === "__all__") {
+      const merged = new Map<string, TeachingStudent>();
+      activeTerm.sections.forEach((section) => {
+        section.students.forEach((student) => {
+          merged.set(student.userId, student);
+        });
+      });
+      return Array.from(merged.values()).sort((a, b) => a.lastName.localeCompare(b.lastName));
+    }
+
+    if (activeSection) {
+      return activeSection.students;
+    }
+
+    const fallbackSection = activeTerm.sections[0];
+    return fallbackSection ? fallbackSection.students : [];
+  }, [activeSection, activeTerm, selectedSectionId]);
+
+  const activeStudent = useMemo(() => {
+    if (!visibleStudents.length) return undefined;
+    return visibleStudents.find((student) => student.userId === selectedStudentId);
+  }, [selectedStudentId, visibleStudents]);
+
+  useEffect(() => {
+    if (!activeTerm) {
+      if (selectedSectionId !== "__all__") {
+        setSelectedSectionId("__all__");
+      }
+      return;
+    }
+
+    if (selectedSectionId === "__all__") {
+      return;
+    }
+
+    const exists = activeTerm.sections.some((section) => section.sectionId === selectedSectionId);
+    if (!exists) {
+      const firstSection = activeTerm.sections[0];
+      setSelectedSectionId(firstSection ? firstSection.sectionId : "__all__");
+    }
+  }, [activeTerm, selectedSectionId]);
+
+  useEffect(() => {
+    if (!visibleStudents.length) {
+      if (selectedStudentId) {
+        setSelectedStudentId("");
+      }
+      return;
+    }
+
+    const exists = visibleStudents.some((student) => student.userId === selectedStudentId);
+    if (!exists) {
+      setSelectedStudentId(visibleStudents[0].userId);
+    }
+  }, [selectedStudentId, visibleStudents]);
 
   useEffect(() => {
     if (!selectedStudentId || !selectedCourseId || !selectedTermId) {
@@ -263,9 +339,9 @@ export default function FacultyStudentNotesPage() {
         <CardHeader>
           <CardTitle className="text-white">Filter Context</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
+        <CardContent className="grid gap-4 md:grid-cols-4">
           {isLoadingCourses ? (
-            Array.from({ length: 3 }).map((_, index) => (
+            Array.from({ length: 4 }).map((_, index) => (
               <Skeleton key={index} className="h-10 bg-gray-800" />
             ))
           ) : (
@@ -278,9 +354,17 @@ export default function FacultyStudentNotesPage() {
                     setSelectedCourseId(value);
                     const course = courses.find((item) => item.courseId === value);
                     const firstTerm = course?.terms[0];
-                    const firstStudent = firstTerm?.students[0];
-                    setSelectedTermId(firstTerm ? firstTerm.termId : "");
-                    setSelectedStudentId(firstStudent ? firstStudent.userId : "");
+                    if (firstTerm) {
+                      setSelectedTermId(firstTerm.termId);
+                      const firstSection = firstTerm.sections[0];
+                      setSelectedSectionId(firstSection ? firstSection.sectionId : "__all__");
+                      const allStudents = firstTerm.sections.flatMap((section) => section.students);
+                      setSelectedStudentId(allStudents[0]?.userId ?? "");
+                    } else {
+                      setSelectedTermId("");
+                      setSelectedSectionId("__all__");
+                      setSelectedStudentId("");
+                    }
                   }}
                 >
                   <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
@@ -303,8 +387,10 @@ export default function FacultyStudentNotesPage() {
                   onValueChange={(value) => {
                     setSelectedTermId(value);
                     const term = activeCourse?.terms.find((item) => item.termId === value);
-                    const firstStudent = term?.students[0];
-                    setSelectedStudentId(firstStudent ? firstStudent.userId : "");
+                    const firstSection = term?.sections[0];
+                    setSelectedSectionId(firstSection ? firstSection.sectionId : "__all__");
+                    const allStudents = term ? term.sections.flatMap((section) => section.students) : [];
+                    setSelectedStudentId(allStudents[0]?.userId ?? "");
                   }}
                 >
                   <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
@@ -321,15 +407,44 @@ export default function FacultyStudentNotesPage() {
               </div>
 
               <div className="space-y-2">
+                <label className="text-sm text-gray-300">Section</label>
+                <Select
+                  value={selectedSectionId}
+                  onValueChange={setSelectedSectionId}
+                  disabled={!activeTerm}
+                >
+                  <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                    <SelectValue placeholder="Choose section" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-900 border-gray-800">
+                    <SelectItem value="__all__" className="text-white">
+                      All Sections
+                    </SelectItem>
+                    {activeTerm?.sections.map((section) => (
+                      <SelectItem key={section.sectionId} value={section.sectionId} className="text-white">
+                        {section.sectionName}
+                        {section.sectionId === "__unassigned__" ? " (Unassigned)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
                 <label className="text-sm text-gray-300">Student</label>
-                <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
+                <Select
+                  value={selectedStudentId}
+                  onValueChange={setSelectedStudentId}
+                  disabled={!visibleStudents.length}
+                >
                   <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
                     <SelectValue placeholder="Choose student" />
                   </SelectTrigger>
                   <SelectContent className="bg-gray-900 border-gray-800 max-h-60 overflow-y-auto">
-                    {activeTerm?.students.map((student) => (
+                    {visibleStudents.map((student) => (
                       <SelectItem key={student.userId} value={student.userId} className="text-white">
                         {student.firstName} {student.lastName} · {student.studentId}
+                        {student.sectionName ? ` · ${student.sectionName}` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -391,7 +506,13 @@ export default function FacultyStudentNotesPage() {
               <div>
                 <label className="text-sm text-gray-300">Student</label>
                 <Input
-                  value={activeStudent ? `${activeStudent.firstName} ${activeStudent.lastName}` : "Select a student"}
+                  value={
+                    activeStudent
+                      ? `${activeStudent.firstName} ${activeStudent.lastName}${
+                          activeStudent.sectionName ? ` · ${activeStudent.sectionName}` : ""
+                        }`
+                      : "Select a student"
+                  }
                   disabled
                   className="mt-1 bg-gray-800 border-gray-700 text-white"
                 />

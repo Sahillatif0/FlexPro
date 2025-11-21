@@ -13,17 +13,18 @@ export async function GET(request: Request) {
       );
     }
 
-    const [enrollments, attendanceRecords, transcripts, activeTerm] = await Promise.all([
+    const [enrollments, attendanceRecords, transcripts, activeTerm, student] = await Promise.all([
       prisma.enrollment.findMany({
         where: { userId },
         include: {
           course: {
             include: {
+              sections: true,
               _count: {
                 select: { enrollments: true },
               },
             },
-          },
+          } as any,
           term: true,
         },
         orderBy: { enrolledAt: 'desc' },
@@ -39,21 +40,49 @@ export async function GET(request: Request) {
         },
       }),
       prisma.term.findFirst({ where: { isActive: true } }),
+      prisma.user.findUnique({ where: { id: userId } }),
     ]);
 
-    const courses = enrollments.map((enrollment) => ({
-      id: enrollment.id,
-      courseId: enrollment.courseId,
-      code: enrollment.course.code,
-      title: enrollment.course.title,
-      creditHours: enrollment.course.creditHours,
-      prerequisite: enrollment.course.prerequisite ?? null,
-      enrolled: enrollment.course._count.enrollments,
-      capacity: enrollment.course.maxCapacity,
-      department: enrollment.course.department,
-      status: enrollment.status,
-      term: enrollment.term?.name ?? null,
-    }));
+    if (!student) {
+      return NextResponse.json(
+        { message: 'Student not found' },
+        { status: 404 }
+      );
+    }
+
+    const studentRecord = student as any;
+    const studentSectionName = typeof studentRecord.section === 'string' ? studentRecord.section.trim() : '';
+    const normalizedStudentSection = studentSectionName.toLowerCase();
+
+    const courses = enrollments.map((enrollment) => {
+      const courseRecord = enrollment.course as any;
+      const courseSections = Array.isArray(courseRecord.sections)
+        ? courseRecord.sections.map((section: any) => ({
+            id: section.id as string,
+            name: section.name as string,
+            normalizedName: (section.name as string).trim().toLowerCase(),
+          }))
+        : [];
+
+      const matchedSection = normalizedStudentSection
+        ? courseSections.find((section) => section.normalizedName === normalizedStudentSection)
+        : undefined;
+
+      return {
+        id: enrollment.id,
+        courseId: enrollment.courseId,
+        code: enrollment.course.code,
+        title: enrollment.course.title,
+        creditHours: enrollment.course.creditHours,
+        prerequisite: enrollment.course.prerequisite ?? null,
+        enrolled: enrollment.course._count.enrollments,
+        capacity: enrollment.course.maxCapacity,
+        department: enrollment.course.department,
+        status: enrollment.status,
+        term: enrollment.term?.name ?? null,
+        section: matchedSection ? matchedSection.name : studentSectionName || null,
+      };
+    });
 
     const totalCreditHours = courses.reduce((sum, course) => sum + course.creditHours, 0);
     const presentCount = attendanceRecords.filter((record) => record.status === 'present').length;

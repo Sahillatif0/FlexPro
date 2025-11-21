@@ -22,6 +22,9 @@ interface AvailableCourse {
   semester: number;
   available: boolean;
   alreadyEnrolled: boolean;
+  sections: { id: string; name: string }[];
+  matchesStudentSection: boolean;
+  studentSection: string | null;
 }
 
 interface EnrollmentSummary {
@@ -194,15 +197,44 @@ export default function EnrollPage() {
         },
       },
       {
+        key: 'sections',
+        title: 'Sections',
+        render: (_: unknown, item: AvailableCourse) => (
+          item.sections.length ? (
+            <div className="flex flex-wrap gap-1">
+              {item.sections.map((section) => (
+                <Badge key={section.id} variant="outline" className="border-gray-600 text-gray-300">
+                  {section.name}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <span className="text-xs text-gray-500">All Sections</span>
+          )
+        ),
+      },
+      {
         key: 'available',
         title: 'Status',
         render: (_: boolean, item: AvailableCourse) => (
-          <Badge
-            variant={item.available ? 'default' : 'destructive'}
-            className={item.available ? 'bg-emerald-600' : ''}
-          >
-            {item.available ? 'Available' : item.alreadyEnrolled ? 'Enrolled' : 'Full'}
-          </Badge>
+          (() => {
+            const label = item.alreadyEnrolled
+              ? 'Enrolled'
+              : !item.matchesStudentSection
+              ? 'Section Restricted'
+              : item.available
+              ? 'Available'
+              : 'Full';
+
+            const variant = label === 'Available' ? 'default' : item.alreadyEnrolled ? 'secondary' : 'destructive';
+            const className = label === 'Available' ? 'bg-emerald-600' : label === 'Enrolled' ? 'bg-blue-600/30 text-blue-200' : '';
+
+            return (
+              <Badge variant={variant} className={className}>
+                {label}
+              </Badge>
+            );
+          })()
         ),
       },
       {
@@ -211,12 +243,16 @@ export default function EnrollPage() {
         render: (_: unknown, item: AvailableCourse) => (
           <Button
             size="sm"
-            disabled={!item.available || enrollingCourse === item.id}
+            disabled={!item.available || enrollingCourse === item.id || !item.matchesStudentSection}
             className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
             onClick={() => handleEnroll(item.id)}
           >
             <Plus className="h-3 w-3 mr-1" />
-            {enrollingCourse === item.id ? 'Enrolling...' : 'Enroll'}
+            {!item.matchesStudentSection
+              ? 'Section Locked'
+              : enrollingCourse === item.id
+              ? 'Enrolling...'
+              : 'Enroll'}
           </Button>
         ),
       },

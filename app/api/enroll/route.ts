@@ -23,16 +23,17 @@ export async function GET(request: Request) {
       );
     }
 
-    const [courses, userEnrollments] = await Promise.all([
+    const [courses, userEnrollments, student] = await Promise.all([
       prisma.course.findMany({
         where: { isActive: true },
         include: {
+          sections: true,
           _count: {
             select: { enrollments: { where: { termId: activeTerm.id } } },
           },
         },
         orderBy: [{ semester: 'asc' }, { code: 'asc' }],
-      }),
+      } as any),
       prisma.enrollment.findMany({
         where: {
           userId,
@@ -42,16 +43,41 @@ export async function GET(request: Request) {
           course: true,
         },
       }),
+      prisma.user.findUnique({ where: { id: userId } }),
     ]);
+
+    if (!student) {
+      return NextResponse.json(
+        { message: 'Student not found' },
+        { status: 404 }
+      );
+    }
+
+    const studentRecord = student as any;
+    const studentSectionName = typeof studentRecord.section === 'string' ? studentRecord.section.trim() : '';
+    const normalizedStudentSection = studentSectionName.toLowerCase();
 
     const departments = Array.from(new Set(courses.map((course) => course.department))).sort();
 
-    const availableCourses = courses.map((course) => {
+    const availableCourses = (courses as any[]).map((course: any) => {
       const enrolledCount = course._count.enrollments;
       const alreadyEnrolled = userEnrollments.some(
         (enrollment) => enrollment.courseId === course.id
       );
       const hasCapacity = enrolledCount < course.maxCapacity;
+
+      const courseSections = Array.isArray(course.sections)
+        ? course.sections.map((section: any) => ({
+            id: section.id as string,
+            name: section.name as string,
+            normalizedName: (section.name as string).trim().toLowerCase(),
+          }))
+        : [];
+
+      const hasDefinedSections = courseSections.length > 0;
+      const sectionMatches = !hasDefinedSections || !normalizedStudentSection
+        ? true
+        : courseSections.some((section: any) => section.normalizedName === normalizedStudentSection);
 
       return {
         id: course.id,
@@ -63,13 +89,16 @@ export async function GET(request: Request) {
         capacity: course.maxCapacity,
         department: course.department,
         semester: course.semester,
-        available: hasCapacity && !alreadyEnrolled,
+        available: hasCapacity && !alreadyEnrolled && sectionMatches,
         alreadyEnrolled,
+        sections: courseSections.map((section: any) => ({ id: section.id as string, name: section.name as string })),
+        matchesStudentSection: sectionMatches,
+        studentSection: studentSectionName || null,
       };
     });
 
-    const currentCredits = userEnrollments.reduce(
-      (sum, enrollment) => sum + (enrollment.course?.creditHours ?? 0),
+    const currentCredits = (userEnrollments as any[]).reduce(
+      (sum, enrollment: any) => sum + (enrollment.course?.creditHours ?? 0),
       0
     );
 
@@ -125,6 +154,37 @@ export async function POST(request: Request) {
         { message: 'Course not found' },
         { status: 404 }
       );
+    }
+
+    const student = await prisma.user.findUnique({ where: { id: userId } });
+    if (!student) {
+      return NextResponse.json(
+        { message: 'Student not found' },
+        { status: 404 }
+      );
+    }
+
+    const courseSections = await (prisma as any).courseSection.findMany({
+      where: { courseId },
+    });
+
+    const studentRecord = student as any;
+    const normalizedStudentSection = typeof studentRecord.section === 'string'
+      ? studentRecord.section.trim().toLowerCase()
+      : '';
+    const hasDefinedSections = Array.isArray(courseSections) && courseSections.length > 0;
+
+    if (hasDefinedSections && normalizedStudentSection) {
+      const matchesSection = (courseSections as any[]).some(
+        (section: any) => (section.name as string).trim().toLowerCase() === normalizedStudentSection
+      );
+
+      if (!matchesSection) {
+        return NextResponse.json(
+          { message: 'This course is not available for your section' },
+          { status: 409 }
+        );
+      }
     }
 
     const existingEnrollment = await prisma.enrollment.findUnique({

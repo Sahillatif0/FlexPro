@@ -40,12 +40,30 @@ export async function GET(request: Request) {
     }
 
     const course = await prisma.course.findFirst({
-      where: { id: courseId, instructorId: sessionUser.id } as any,
-    });
+      where: {
+        id: courseId,
+        sections: {
+          some: {
+            instructorId: sessionUser.id,
+          },
+        },
+      },
+      include: {
+        sections: {
+          where: { instructorId: sessionUser.id },
+        },
+      },
+    } as any);
 
     if (!course) {
       return NextResponse.json({ message: "Course not found" }, { status: 404 });
     }
+
+    const sectionNameSet = new Set(
+      (Array.isArray((course as any).sections) ? ((course as any).sections as any[]) : [])
+        .map((section: any) => (section.name as string).trim().toLowerCase())
+        .filter((name: string) => name.length > 0)
+    );
 
     const records = await prisma.transcript.findMany({
       where: {
@@ -53,14 +71,26 @@ export async function GET(request: Request) {
         termId,
         status: "final",
       },
-      select: {
-        userId: true,
-        grade: true,
-        gradePoints: true,
+      include: {
+        user: true,
       },
     });
 
-    return NextResponse.json({ records });
+    const filtered = (records as any[])
+      .filter((record: any) => {
+        const normalizedStudentSection = (record.user?.section ?? "").trim().toLowerCase();
+        if (!normalizedStudentSection) {
+          return true;
+        }
+        return sectionNameSet.has(normalizedStudentSection);
+      })
+      .map((record: any) => ({
+        userId: record.userId,
+        grade: record.grade,
+        gradePoints: record.gradePoints,
+      }));
+
+    return NextResponse.json({ records: filtered });
   } catch (error) {
     console.error("Faculty marks fetch failed", error);
     return NextResponse.json({ message: "Failed to load gradebook" }, { status: 500 });
@@ -90,12 +120,30 @@ export async function POST(request: Request) {
     }
 
     const course = await prisma.course.findFirst({
-      where: { id: courseId, instructorId: sessionUser.id } as any,
-    });
+      where: {
+        id: courseId,
+        sections: {
+          some: {
+            instructorId: sessionUser.id,
+          },
+        },
+      },
+      include: {
+        sections: {
+          where: { instructorId: sessionUser.id },
+        },
+      },
+    } as any);
 
     if (!course) {
       return NextResponse.json({ message: "Course not found" }, { status: 404 });
     }
+
+    const sectionNameSet = new Set(
+      (Array.isArray((course as any).sections) ? ((course as any).sections as any[]) : [])
+        .map((section: any) => (section.name as string).trim().toLowerCase())
+        .filter((name: string) => name.length > 0)
+    );
 
     const studentIds = entries
       .filter((entry: any): entry is { userId: string; grade?: string; gradePoints?: number | null } =>
@@ -109,18 +157,28 @@ export async function POST(request: Request) {
         termId,
         userId: { in: studentIds },
       },
-      select: {
-        userId: true,
+      include: {
+        user: true,
       },
     });
 
-    const validStudents = new Set(enrollments.map((enrollment) => enrollment.userId));
+    const filteredValidStudents = new Set(
+      (enrollments as any[])
+        .filter((enrollment: any) => {
+          const normalizedStudentSection = (enrollment.user?.section ?? "").trim().toLowerCase();
+          if (!normalizedStudentSection) {
+            return true;
+          }
+          return sectionNameSet.has(normalizedStudentSection);
+        })
+        .map((enrollment: any) => enrollment.userId)
+    );
 
     const tasks = entries
       .filter((entry: any): entry is { userId: string; grade: string; gradePoints?: number | null } =>
         Boolean(entry?.userId) && typeof entry?.grade === "string" && entry.grade.length > 0
       )
-      .filter((entry: any) => validStudents.has(entry.userId))
+      .filter((entry: any) => filteredValidStudents.has(entry.userId))
       .map((entry: any) => {
         const gradePoints =
           typeof entry.gradePoints === "number" && !Number.isNaN(entry.gradePoints)

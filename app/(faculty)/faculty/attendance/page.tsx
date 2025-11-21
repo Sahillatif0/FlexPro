@@ -14,12 +14,19 @@ interface TeachingStudent {
   firstName: string;
   lastName: string;
   email: string;
+  sectionName: string | null;
+}
+
+interface TeachingSection {
+  sectionId: string;
+  sectionName: string;
+  students: TeachingStudent[];
 }
 
 interface TeachingTerm {
   termId: string;
   termName: string;
-  students: TeachingStudent[];
+  sections: TeachingSection[];
 }
 
 interface TeachingCourse {
@@ -40,6 +47,7 @@ export default function FacultyAttendancePage() {
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
   const [selectedCourseId, setSelectedCourseId] = useState<string>("");
   const [selectedTermId, setSelectedTermId] = useState<string>("");
+  const [selectedSectionId, setSelectedSectionId] = useState<string>("__all__");
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().slice(0, 10)
   );
@@ -67,10 +75,16 @@ export default function FacultyAttendancePage() {
         if (!cancelled) {
           setCourses(payload.courses);
           if (payload.courses.length) {
-            setSelectedCourseId(payload.courses[0].courseId);
-            const firstTerm = payload.courses[0].terms[0];
+            const firstCourse = payload.courses[0];
+            setSelectedCourseId(firstCourse.courseId);
+            const firstTerm = firstCourse.terms[0];
             if (firstTerm) {
               setSelectedTermId(firstTerm.termId);
+              const firstSection = firstTerm.sections[0];
+              setSelectedSectionId(firstSection ? firstSection.sectionId : "__all__");
+            } else {
+              setSelectedTermId("");
+              setSelectedSectionId("__all__");
             }
           }
         }
@@ -105,6 +119,52 @@ export default function FacultyAttendancePage() {
     return activeCourse.terms.find((term) => term.termId === selectedTermId);
   }, [activeCourse, selectedTermId]);
 
+  const activeSection = useMemo(() => {
+    if (!activeTerm) return undefined;
+    if (!selectedSectionId || selectedSectionId === "__all__") return undefined;
+    return activeTerm.sections.find((section) => section.sectionId === selectedSectionId);
+  }, [activeTerm, selectedSectionId]);
+
+  const visibleStudents = useMemo(() => {
+    if (!activeTerm) return [] as TeachingStudent[];
+
+    if (selectedSectionId === "__all__") {
+      const merged = new Map<string, TeachingStudent>();
+      activeTerm.sections.forEach((section) => {
+        section.students.forEach((student) => {
+          merged.set(student.userId, student);
+        });
+      });
+      return Array.from(merged.values()).sort((a, b) => a.lastName.localeCompare(b.lastName));
+    }
+
+    if (activeSection) {
+      return activeSection.students;
+    }
+
+    const fallbackSection = activeTerm.sections[0];
+    return fallbackSection ? fallbackSection.students : [];
+  }, [activeSection, activeTerm, selectedSectionId]);
+
+  useEffect(() => {
+    if (!activeTerm) {
+      if (selectedSectionId !== "__all__") {
+        setSelectedSectionId("__all__");
+      }
+      return;
+    }
+
+    if (selectedSectionId === "__all__") {
+      return;
+    }
+
+    const exists = activeTerm.sections.some((section) => section.sectionId === selectedSectionId);
+    if (!exists) {
+      const firstSection = activeTerm.sections[0];
+      setSelectedSectionId(firstSection ? firstSection.sectionId : "__all__");
+    }
+  }, [activeTerm, selectedSectionId]);
+
   useEffect(() => {
     if (!selectedCourseId || !selectedTermId || !selectedDate) {
       return;
@@ -121,6 +181,9 @@ export default function FacultyAttendancePage() {
           termId: selectedTermId,
           date: selectedDate,
         });
+        if (selectedSectionId && selectedSectionId !== "__all__") {
+          params.set("sectionId", selectedSectionId);
+        }
         const response = await fetch(`/api/faculty/attendance?${params.toString()}`, {
           signal: controller.signal,
         });
@@ -155,7 +218,7 @@ export default function FacultyAttendancePage() {
       cancelled = true;
       controller.abort();
     };
-  }, [selectedCourseId, selectedTermId, selectedDate]);
+  }, [selectedCourseId, selectedTermId, selectedSectionId, selectedDate]);
 
   const handleStatusChange = (studentId: string, status: AttendanceRecord["status"]) => {
     setAttendanceMap((prev) => ({ ...prev, [studentId]: status }));
@@ -168,7 +231,7 @@ export default function FacultyAttendancePage() {
 
     try {
       setIsSaving(true);
-      const entries = activeTerm.students.map((student) => ({
+      const entries = visibleStudents.map((student) => ({
         userId: student.userId,
         status: attendanceMap[student.userId] ?? "absent",
       }));
@@ -182,6 +245,7 @@ export default function FacultyAttendancePage() {
           courseId: selectedCourseId,
           termId: selectedTermId,
           date: selectedDate,
+          sectionId: selectedSectionId !== "__all__" ? selectedSectionId : undefined,
           entries,
         }),
       });
@@ -228,13 +292,13 @@ export default function FacultyAttendancePage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {isLoadingCourses ? (
-            <div className="grid gap-4 md:grid-cols-3">
-              {Array.from({ length: 3 }).map((_, index) => (
+            <div className="grid gap-4 md:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, index) => (
                 <Skeleton key={index} className="h-10 bg-gray-800" />
               ))}
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-4">
               <div className="space-y-2">
                 <label className="text-sm text-gray-300">Course</label>
                 <Select
@@ -243,7 +307,14 @@ export default function FacultyAttendancePage() {
                     setSelectedCourseId(value);
                     const course = courses.find((item) => item.courseId === value);
                     const firstTerm = course?.terms[0];
-                    setSelectedTermId(firstTerm ? firstTerm.termId : "");
+                    if (firstTerm) {
+                      setSelectedTermId(firstTerm.termId);
+                      const firstSection = firstTerm.sections[0];
+                      setSelectedSectionId(firstSection ? firstSection.sectionId : "__all__");
+                    } else {
+                      setSelectedTermId("");
+                      setSelectedSectionId("__all__");
+                    }
                   }}
                 >
                   <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
@@ -261,7 +332,16 @@ export default function FacultyAttendancePage() {
 
               <div className="space-y-2">
                 <label className="text-sm text-gray-300">Term</label>
-                <Select value={selectedTermId} onValueChange={setSelectedTermId}>
+                <Select
+                  value={selectedTermId}
+                  onValueChange={(value) => {
+                    setSelectedTermId(value);
+                    const course = courses.find((item) => item.courseId === selectedCourseId);
+                    const term = course?.terms.find((item) => item.termId === value);
+                    const firstSection = term?.sections[0];
+                    setSelectedSectionId(firstSection ? firstSection.sectionId : "__all__");
+                  }}
+                >
                   <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
                     <SelectValue placeholder="Choose term" />
                   </SelectTrigger>
@@ -269,6 +349,30 @@ export default function FacultyAttendancePage() {
                     {activeCourse?.terms.map((term) => (
                       <SelectItem key={term.termId} value={term.termId} className="text-white">
                         {term.termName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm text-gray-300">Section</label>
+                <Select
+                  value={selectedSectionId}
+                  onValueChange={setSelectedSectionId}
+                  disabled={!activeTerm}
+                >
+                  <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                    <SelectValue placeholder="Choose section" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-900 border-gray-800">
+                    <SelectItem value="__all__" className="text-white">
+                      All Sections
+                    </SelectItem>
+                    {activeTerm?.sections.map((section) => (
+                      <SelectItem key={section.sectionId} value={section.sectionId} className="text-white">
+                        {section.sectionName}
+                        {section.sectionId === "__unassigned__" ? " (Unassigned)" : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -304,11 +408,11 @@ export default function FacultyAttendancePage() {
                 </div>
               ))}
             </div>
-          ) : activeTerm.students.length === 0 ? (
+          ) : visibleStudents.length === 0 ? (
             <p className="text-sm text-gray-400">No students are enrolled for the selected course and term.</p>
           ) : (
             <div className="space-y-3">
-              {activeTerm.students.map((student) => {
+              {visibleStudents.map((student) => {
                 const status = attendanceMap[student.userId] ?? "absent";
                 return (
                   <div
@@ -320,6 +424,9 @@ export default function FacultyAttendancePage() {
                         {student.firstName} {student.lastName}
                       </p>
                       <p className="text-xs text-gray-400">{student.studentId}</p>
+                      {student.sectionName ? (
+                        <p className="text-xs text-gray-500">Section {student.sectionName}</p>
+                      ) : null}
                       <p className="text-xs text-gray-500">{student.email}</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">

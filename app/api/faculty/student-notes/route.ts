@@ -79,17 +79,53 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "studentId, courseId, termId, title, and content are required" }, { status: 400 });
     }
 
+    const courseAssignment = await prisma.course.findFirst({
+      where: {
+        id: courseId,
+        sections: {
+          some: {
+            instructorId: sessionUser.id,
+          },
+        },
+      },
+      include: {
+        sections: {
+          where: { instructorId: sessionUser.id },
+        },
+      },
+    } as any);
+
+    if (!courseAssignment) {
+      return NextResponse.json({ message: "Course not found" }, { status: 404 });
+    }
+
+    const sectionNameSet = new Set(
+      (Array.isArray((courseAssignment as any).sections) ? ((courseAssignment as any).sections as any[]) : [])
+        .map((section: any) => (section.name as string).trim().toLowerCase())
+        .filter((name: string) => name.length > 0)
+    );
+
     const enrollment = await prisma.enrollment.findFirst({
       where: {
         courseId,
         termId,
         userId: studentId,
-        course: { instructorId: sessionUser.id } as any,
+      },
+      include: {
+        user: true,
       },
     });
 
     if (!enrollment) {
       return NextResponse.json({ message: "Student is not enrolled in this course and term" }, { status: 400 });
+    }
+
+    const normalizedStudentSection = (((enrollment as any).user?.section ?? "") as string)
+      .trim()
+      .toLowerCase();
+
+    if (normalizedStudentSection && !sectionNameSet.has(normalizedStudentSection)) {
+      return NextResponse.json({ message: "Student belongs to a section you do not teach" }, { status: 403 });
     }
 
     const note = await (prisma as any).studentNote.upsert({

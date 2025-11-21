@@ -21,10 +21,23 @@ export async function GET() {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
-    const [courses, attendanceRecords, transcriptRecords, recentNotes] = await Promise.all([
+    const [courses, recentNotes] = await Promise.all([
       prisma.course.findMany({
-        where: { instructorId: sessionUser.id } as any,
+        where: {
+          sections: {
+            some: {
+              instructorId: sessionUser.id,
+            },
+          },
+        },
         include: {
+          sections: {
+            where: { instructorId: sessionUser.id },
+            select: {
+              id: true,
+              name: true,
+            },
+          },
           enrollments: {
             include: {
               user: true,
@@ -32,31 +45,23 @@ export async function GET() {
             },
           },
           attendances: {
-            include: { term: true },
+            include: {
+              term: true,
+              user: true,
+            },
             orderBy: { date: "desc" },
           },
           transcripts: {
-            include: { term: true },
+            include: {
+              term: true,
+              user: true,
+            },
             where: { status: "final" },
+            orderBy: { createdAt: "desc" },
           },
         },
-      }),
-      prisma.attendance.findMany({
-        where: { course: { instructorId: sessionUser.id } as any },
-        include: {
-          course: true,
-        },
-        orderBy: { date: "desc" },
-        take: 10,
-      }),
-      prisma.transcript.findMany({
-        where: { course: { instructorId: sessionUser.id } as any, status: "final" },
-        include: {
-          course: true,
-        },
-        orderBy: { createdAt: "desc" },
-        take: 10,
-      }),
+        orderBy: { code: "asc" },
+      } as any),
       (prisma as any).studentNote.findMany({
         where: { facultyId: sessionUser.id },
         include: {
@@ -73,27 +78,84 @@ export async function GET() {
     let pendingGradeEntries = 0;
     let pendingAttendanceSessions = 0;
 
+    const attendanceTimeline: {
+      id: string;
+      courseCode: string;
+      status: string;
+      date: Date;
+    }[] = [];
+    const gradeTimeline: {
+      id: string;
+      courseCode: string;
+      grade: string;
+      createdAt: Date;
+    }[] = [];
+
     const courseStats = (courses as any[]).map((course) => {
-      (course.enrollments as any[]).forEach((enrollment: any) => {
+      const sectionNameSet = new Set(
+        (course.sections as any[])
+          .map((section: any) => (section.name as string).trim().toLowerCase())
+          .filter((name: string) => name.length > 0)
+      );
+
+      const isStudentAllowed = (user: any) => {
+        const normalizedSection = (user?.section ?? "").trim().toLowerCase();
+        if (!normalizedSection) {
+          return true;
+        }
+        return sectionNameSet.has(normalizedSection);
+      };
+
+      const enrollments = (course.enrollments as any[]).filter((enrollment: any) =>
+        isStudentAllowed(enrollment.user)
+      );
+
+      enrollments.forEach((enrollment: any) => {
         uniqueStudentIds.add(enrollment.userId);
       });
 
-      const transcriptLookup = new Map(
-        (course.transcripts as any[]).map((record: any) => [`${record.userId}-${record.termId}`, record])
+      const attendances = (course.attendances as any[]).filter((record: any) =>
+        isStudentAllowed(record.user)
       );
 
-      (course.enrollments as any[]).forEach((enrollment: any) => {
+      const transcripts = (course.transcripts as any[]).filter((record: any) =>
+        isStudentAllowed(record.user)
+      );
+
+      attendances.forEach((record: any) =>
+        attendanceTimeline.push({
+          id: record.id,
+          courseCode: course.code,
+          status: record.status,
+          date: record.date,
+        })
+      );
+
+      transcripts.forEach((record: any) =>
+        gradeTimeline.push({
+          id: record.id,
+          courseCode: course.code,
+          grade: record.grade,
+          createdAt: record.createdAt,
+        })
+      );
+
+      const transcriptLookup = new Map(
+        transcripts.map((record: any) => [`${record.userId}-${record.termId}`, record])
+      );
+
+      enrollments.forEach((enrollment: any) => {
         if (!transcriptLookup.has(`${enrollment.userId}-${enrollment.termId}`)) {
           pendingGradeEntries += 1;
         }
       });
 
-      const lastAttendance = (course.attendances as any[])[0];
+      const lastAttendance = attendances[0];
       if (!lastAttendance || daysBetween(lastAttendance.date) >= 7) {
         pendingAttendanceSessions += 1;
       }
 
-      const attendanceTotals = (course.attendances as any[]).reduce(
+      const attendanceTotals = attendances.reduce(
         (acc: any, record: any) => {
           acc.total += 1;
           if (record.status === "present") {
@@ -104,7 +166,7 @@ export async function GET() {
         { present: 0, total: 0 }
       );
 
-      const gradeAverageData = (course.transcripts as any[]).reduce(
+      const gradeAverageData = transcripts.reduce(
         (acc: any, record: any) => {
           acc.total += 1;
           acc.points += record.gradePoints;
@@ -113,7 +175,7 @@ export async function GET() {
         { points: 0, total: 0 }
       );
 
-      const mostRecentTerm = (course.enrollments as any[])
+      const mostRecentTerm = enrollments
         .map((enrollment: any) => enrollment.term)
         .sort((a: any, b: any) => b.startDate.getTime() - a.startDate.getTime())[0];
 
@@ -131,22 +193,29 @@ export async function GET() {
       };
     });
 
-    const recentActivities = [
-      ...(attendanceRecords as any[]).map((record: any) => ({
+    const recentAttendanceActivities = attendanceTimeline
+      .sort((a, b) => b.date.getTime() - a.date.getTime())
+      .slice(0, 10)
+      .map((record) => ({
         id: `attendance-${record.id}`,
         type: "attendance" as const,
-        title: `${record.course.code} attendance updated`,
+        title: `${record.courseCode} attendance updated`,
         description: `${record.status.toUpperCase()} marked on ${record.date.toLocaleDateString()}`,
         timestamp: record.date.toISOString(),
-      })),
-      ...(transcriptRecords as any[]).map((record: any) => ({
+      }));
+
+    const recentGradeActivities = gradeTimeline
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 10)
+      .map((record) => ({
         id: `grade-${record.id}`,
         type: "grade" as const,
-        title: `${record.course.code} grade submitted`,
+        title: `${record.courseCode} grade submitted`,
         description: `Grade ${record.grade} recorded`,
         timestamp: record.createdAt.toISOString(),
-      })),
-    ]
+      }));
+
+    const recentActivities = [...recentAttendanceActivities, ...recentGradeActivities]
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, 8);
 

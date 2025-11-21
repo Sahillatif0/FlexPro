@@ -22,6 +22,7 @@ interface CourseRow {
   department: string;
   status: string;
   term: string | null;
+  section: string | null;
 }
 
 interface CoursesSummary {
@@ -112,6 +113,15 @@ export default function CoursesPage() {
           </Badge>
         ),
         sortable: true,
+      },
+      {
+        key: 'section',
+        title: 'Section',
+        render: (value: string | null) => (
+          <Badge variant="outline" className="border-gray-600 text-gray-300">
+            {value ?? '—'}
+          </Badge>
+        ),
       },
       {
         key: 'capacity',
