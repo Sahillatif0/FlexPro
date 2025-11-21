@@ -399,7 +399,7 @@ export default function FacultyAttendancePage() {
           <CardTitle className="text-white">Student Attendance</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {isLoadingCourses || !activeTerm ? (
+          {isLoadingCourses || isLoadingAttendance ? (
             <div className="space-y-3">
               {Array.from({ length: 5 }).map((_, index) => (
                 <div key={index} className="grid grid-cols-4 items-center gap-4">
@@ -408,6 +408,9 @@ export default function FacultyAttendancePage() {
                 </div>
               ))}
             </div>
+          ) : !activeTerm ? (
+            <p className="text-sm text-gray-400">Select a course and term to view students.</p>
+          ) : activeTerm.students.length === 0 ? (
           ) : visibleStudents.length === 0 ? (
             <p className="text-sm text-gray-400">No students are enrolled for the selected course and term.</p>
           ) : (
