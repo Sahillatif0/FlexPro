@@ -10,6 +10,10 @@ import {
   Settings,
   LogOut,
   Menu,
+  UserPlus,
+  UserCog,
+  PlusCircle,
+  Megaphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
@@ -18,8 +22,12 @@ import { Button } from "@/components/ui/button";
 const navigation = [
   { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { name: "Courses", href: "/admin/courses", icon: BookMarked },
+  { name: "Add Course", href: "/admin/courses#new", icon: PlusCircle },
   { name: "Students", href: "/admin/students", icon: Users },
+  { name: "Register Student", href: "/admin/students/register", icon: UserPlus },
   { name: "Faculty", href: "/admin/faculty", icon: GraduationCap },
+  { name: "Register Faculty", href: "/admin/faculty/register", icon: UserCog },
+  { name: "Notifications", href: "/admin/notifications", icon: Megaphone },
 ];
 
 export function AdminSidebar() {

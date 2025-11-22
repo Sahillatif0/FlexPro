@@ -502,7 +502,7 @@ export default function AdminCoursesPage() {
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[2fr,3fr]">
-        <Card className="bg-gray-900 border-gray-800">
+        <Card id="new" className="bg-gray-900 border-gray-800">
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
               <BookMarked className="h-5 w-5 text-purple-400" />

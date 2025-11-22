@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { AUTH_COOKIE_NAME, getSessionFromToken } from "@/lib/auth";
+import { adminCourseUpdateSchema } from "@/lib/validation/course";
+import { Prisma } from "@prisma/client";
 
 async function requireAdminSession() {
   const token = cookies().get(AUTH_COOKIE_NAME)?.value;
@@ -15,18 +17,57 @@ async function requireAdminSession() {
   return { status: 200 as const };
 }
 
-function mapCourse(course: any, sections: any[]) {
+const instructorSelect = Prisma.validator<Prisma.UserSelect>()({
+  id: true,
+  firstName: true,
+  lastName: true,
+  employeeId: true,
+});
+
+const courseSectionSelect = Prisma.validator<Prisma.CourseSectionSelect>()({
+  id: true,
+  name: true,
+  instructor: {
+    select: instructorSelect,
+  },
+});
+
+const courseSelect = Prisma.validator<Prisma.CourseSelect>()({
+  id: true,
+  code: true,
+  title: true,
+  description: true,
+  department: true,
+  creditHours: true,
+  semester: true,
+  maxCapacity: true,
+  isActive: true,
+  prerequisite: true,
+  createdAt: true,
+  updatedAt: true,
+  sections: {
+    orderBy: { name: "asc" },
+    select: courseSectionSelect,
+  },
+});
+
+type CourseRecord = Prisma.CourseGetPayload<{ select: typeof courseSelect }>;
+
+function mapCourse(course: CourseRecord) {
   return {
     id: course.id,
     code: course.code,
     title: course.title,
+    description: course.description ?? null,
     department: course.department,
     creditHours: course.creditHours,
     semester: course.semester,
     maxCapacity: course.maxCapacity,
     isActive: course.isActive,
+    prerequisite: course.prerequisite ?? null,
     createdAt: course.createdAt.toISOString(),
-    sections: sections.map((section: any) => ({
+    updatedAt: course.updatedAt.toISOString(),
+    sections: (course.sections ?? []).map((section) => ({
       id: section.id,
       name: section.name,
       instructor: section.instructor
@@ -39,6 +80,34 @@ function mapCourse(course: any, sections: any[]) {
         : null,
     })),
   };
+}
+
+export async function GET(_request: Request, { params }: { params: { courseId: string } }) {
+  try {
+    const session = await requireAdminSession();
+    if (session.status !== 200) {
+      return NextResponse.json({ message: session.message }, { status: session.status });
+    }
+
+    const { courseId } = params;
+    if (!courseId) {
+      return NextResponse.json({ message: "Course id is required" }, { status: 400 });
+    }
+
+    const course = await prisma.course.findUnique({
+      where: { id: courseId },
+      select: courseSelect,
+    });
+
+    if (!course) {
+      return NextResponse.json({ message: "Course not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ course: mapCourse(course) });
+  } catch (error) {
+    console.error("Admin fetch course error", error);
+    return NextResponse.json({ message: "Unable to load course" }, { status: 500 });
+  }
 }
 
 export async function PATCH(request: Request, { params }: { params: { courseId: string } }) {
@@ -58,58 +127,44 @@ export async function PATCH(request: Request, { params }: { params: { courseId: 
       return NextResponse.json({ message: "Invalid JSON payload" }, { status: 400 });
     }
 
-    const data: Record<string, unknown> = {};
-
-    if (typeof payload.title === "string") {
-      data.title = payload.title.trim();
-    }
-    if (typeof payload.description === "string") {
-      data.description = payload.description.trim();
-    }
-    if (typeof payload.creditHours === "number" && payload.creditHours > 0) {
-      data.creditHours = payload.creditHours;
-    }
-    if (typeof payload.department === "string") {
-      data.department = payload.department;
-    }
-    if (typeof payload.semester === "number" && payload.semester > 0) {
-      data.semester = payload.semester;
-    }
-    if (typeof payload.prerequisite === "string") {
-      data.prerequisite = payload.prerequisite.trim() || null;
-    }
-    if (typeof payload.maxCapacity === "number" && payload.maxCapacity > 0) {
-      data.maxCapacity = payload.maxCapacity;
-    }
-    if (typeof payload.isActive === "boolean") {
-      data.isActive = payload.isActive;
+    const parsed = adminCourseUpdateSchema.safeParse(payload);
+    if (!parsed.success) {
+      return NextResponse.json({ message: "Validation failed", errors: parsed.error.flatten().fieldErrors }, { status: 400 });
     }
 
-    if (Object.keys(data).length === 0) {
+    const data = parsed.data;
+
+    const courseExists = await prisma.course.findUnique({
+      where: { id: courseId },
+      select: { id: true },
+    });
+
+    if (!courseExists) {
+      return NextResponse.json({ message: "Course not found" }, { status: 404 });
+    }
+
+    const updateData: Prisma.CourseUpdateInput = {};
+
+    if (data.title) updateData.title = data.title;
+    if (data.department) updateData.department = data.department;
+    if (data.description !== undefined) updateData.description = data.description;
+    if (data.prerequisite !== undefined) updateData.prerequisite = data.prerequisite;
+    if (data.creditHours !== undefined) updateData.creditHours = data.creditHours;
+    if (data.semester !== undefined) updateData.semester = data.semester;
+    if (data.maxCapacity !== undefined) updateData.maxCapacity = data.maxCapacity;
+    if (data.isActive !== undefined) updateData.isActive = data.isActive;
+
+    if (Object.keys(updateData).length === 0) {
       return NextResponse.json({ message: "No valid fields provided" }, { status: 400 });
     }
 
-    const course = (await prisma.course.update({
+    const course = await prisma.course.update({
       where: { id: courseId },
-      data: data as any,
-    })) as any;
-
-    const sections = await (prisma as any).courseSection.findMany({
-      where: { courseId },
-      include: {
-        instructor: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            employeeId: true,
-          },
-        },
-      },
-      orderBy: { name: "asc" },
+      data: updateData,
+      select: courseSelect,
     });
 
-    return NextResponse.json({ message: "Course updated", course: mapCourse(course, sections) });
+    return NextResponse.json({ message: "Course updated", course: mapCourse(course) });
   } catch (error) {
     console.error("Admin update course error", error);
     return NextResponse.json({ message: "Unable to update course" }, { status: 500 });
