@@ -23,6 +23,20 @@ interface CourseRow {
   status: string;
   term: string | null;
   section: string | null;
+  sectionInstructor: {
+    id: string;
+    fullName: string;
+    employeeId: string | null;
+  } | null;
+  sections: Array<{
+    id: string;
+    name: string;
+    instructor: {
+      id: string;
+      fullName: string;
+      employeeId: string | null;
+    } | null;
+  }>;
 }
 
 interface CoursesSummary {
@@ -121,6 +135,15 @@ export default function CoursesPage() {
           <Badge variant="outline" className="border-gray-600 text-gray-300">
             {value ?? '—'}
           </Badge>
+        ),
+      },
+      {
+        key: 'sectionInstructor',
+        title: 'Instructor',
+        render: (_: unknown, item: CourseRow) => (
+          <span className="text-sm text-gray-300">
+            {item.sectionInstructor?.fullName ?? '—'}
+          </span>
         ),
       },
       {

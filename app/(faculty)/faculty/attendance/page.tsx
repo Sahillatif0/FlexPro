@@ -410,9 +410,12 @@ export default function FacultyAttendancePage() {
             </div>
           ) : !activeTerm ? (
             <p className="text-sm text-gray-400">Select a course and term to view students.</p>
-          ) : activeTerm.students.length === 0 ? (
+          ) : activeTerm.sections.length === 0 ? (
+            <p className="text-sm text-gray-400">No sections are assigned to you for this course and term.</p>
+          ) : selectedSectionId !== "__all__" && !activeSection ? (
+            <p className="text-sm text-gray-400">Select another section to manage attendance.</p>
           ) : visibleStudents.length === 0 ? (
-            <p className="text-sm text-gray-400">No students are enrolled for the selected course and term.</p>
+            <p className="text-sm text-gray-400">No students are enrolled for the selected filters.</p>
           ) : (
             <div className="space-y-3">
               {visibleStudents.map((student) => {

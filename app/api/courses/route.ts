@@ -19,7 +19,18 @@ export async function GET(request: Request) {
         include: {
           course: {
             include: {
-              sections: true,
+              sections: {
+                include: {
+                  instructor: {
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      employeeId: true,
+                    },
+                  },
+                },
+              },
               _count: {
                 select: { enrollments: true },
               },
@@ -54,19 +65,59 @@ export async function GET(request: Request) {
     const studentSectionName = typeof studentRecord.section === 'string' ? studentRecord.section.trim() : '';
     const normalizedStudentSection = studentSectionName.toLowerCase();
 
+    type SectionInstructor = {
+      id: string;
+      firstName: string;
+      lastName: string;
+      employeeId: string | null;
+    };
+
+    type CourseSectionRecord = {
+      id: string;
+      name: string;
+      normalizedName: string;
+      instructor: SectionInstructor | null;
+    };
+
+    type CourseRecord = {
+      code: string;
+      title: string;
+      creditHours: number;
+      prerequisite: string | null;
+      maxCapacity: number;
+      department: string;
+      sections?: Array<{
+        id: string;
+        name: string;
+        instructor: SectionInstructor | null;
+      }>;
+      _count?: {
+        enrollments: number;
+      };
+    };
+
     const courses = enrollments.map((enrollment) => {
-      const courseRecord = enrollment.course as any;
-      const courseSections = Array.isArray(courseRecord.sections)
-        ? courseRecord.sections.map((section: any) => ({
-            id: section.id as string,
-            name: section.name as string,
-            normalizedName: (section.name as string).trim().toLowerCase(),
+      const courseRecord = enrollment.course as CourseRecord;
+      const courseSections: CourseSectionRecord[] = Array.isArray(courseRecord.sections)
+        ? courseRecord.sections.map((section) => ({
+            id: section.id,
+            name: section.name,
+            normalizedName: section.name.trim().toLowerCase(),
+            instructor: section.instructor,
           }))
         : [];
 
       const matchedSection = normalizedStudentSection
         ? courseSections.find((section) => section.normalizedName === normalizedStudentSection)
         : undefined;
+
+      const matchedInstructor = matchedSection?.instructor
+        ? {
+            id: matchedSection.instructor.id,
+            fullName: `${matchedSection.instructor.firstName} ${matchedSection.instructor.lastName}`,
+            employeeId: matchedSection.instructor.employeeId,
+          }
+        : null;
 
       return {
         id: enrollment.id,
@@ -75,12 +126,24 @@ export async function GET(request: Request) {
         title: enrollment.course.title,
         creditHours: enrollment.course.creditHours,
         prerequisite: enrollment.course.prerequisite ?? null,
-        enrolled: enrollment.course._count.enrollments,
+        enrolled: courseRecord._count?.enrollments ?? 0,
         capacity: enrollment.course.maxCapacity,
         department: enrollment.course.department,
         status: enrollment.status,
         term: enrollment.term?.name ?? null,
         section: matchedSection ? matchedSection.name : studentSectionName || null,
+        sectionInstructor: matchedInstructor,
+        sections: courseSections.map((section) => ({
+          id: section.id,
+          name: section.name,
+          instructor: section.instructor
+            ? {
+                id: section.instructor.id,
+                fullName: `${section.instructor.firstName} ${section.instructor.lastName}`,
+                employeeId: section.instructor.employeeId,
+              }
+            : null,
+        })),
       };
     });
 

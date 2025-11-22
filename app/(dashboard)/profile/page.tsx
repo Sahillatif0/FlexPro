@@ -26,18 +26,20 @@ export default function ProfilePage() {
     address: user?.address || '',
   });
 
+  const userId = user?.id;
+
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
 
     const controller = new AbortController();
 
     async function loadProfile() {
-      if(!user) return;
+      if (!userId) return;
       setIsLoading(true);
       setError(null);
 
       try {
-        const params = new URLSearchParams({ userId: user.id });
+        const params = new URLSearchParams({ userId });
         const response = await fetch(`/api/profile?${params.toString()}`, {
           signal: controller.signal,
         });
@@ -74,7 +76,7 @@ export default function ProfilePage() {
 
     loadProfile();
     return () => controller.abort();
-  }, [setUser, toast, user?.id]);
+  }, [setUser, toast, userId]);
 
   const handleSave = async () => {
     if (!user) return;
@@ -137,7 +139,7 @@ export default function ProfilePage() {
       phone: user.phone || '',
       address: user.address || '',
     });
-  }, [user?.firstName, user?.lastName, user?.bio, user?.phone, user?.address]);
+  }, [user]);
 
   if (!user) {
     return <p className="text-gray-300">Sign in to view profile information.</p>;
