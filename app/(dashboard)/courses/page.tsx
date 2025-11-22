@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAppStore } from '@/store';
 import { useToast } from '@/hooks/use-toast';
-import { BookOpen, Users, Clock, TrendingUp } from 'lucide-react';
+import { BookOpen, Users, Clock, TrendingUp, Trash2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface CourseRow {
@@ -52,53 +53,84 @@ export default function CoursesPage() {
   const [courses, setCourses] = useState<CourseRow[]>([]);
   const [summary, setSummary] = useState<CoursesSummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [droppingCourse, setDroppingCourse] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+
+  const loadCourses = useCallback(async () => {
+    if (!user) return;
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const params = new URLSearchParams({ userId: user.id });
+      const response = await fetch(`/api/courses?${params.toString()}`);
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result?.message || 'Failed to load courses');
+      }
+
+      const payload = (await response.json()) as {
+        courses: CourseRow[];
+        summary: CoursesSummary;
+      };
+
+      setCourses(payload.courses);
+      setSummary(payload.summary);
+    } catch (err: any) {
+      console.error('Courses fetch error', err);
+      setError(err.message || 'Failed to load courses');
+      toast({
+        title: 'Unable to load courses',
+        description: err.message || 'Please try again shortly.',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user, toast]);
 
   useEffect(() => {
-    if (!user) return;
-    const userId = user.id;
+    loadCourses();
+  }, [loadCourses]);
 
-    const controller = new AbortController();
-
-    async function loadCourses() {
-      setIsLoading(true);
-      setError(null);
+  const handleDrop = useCallback(
+    async (courseId: string) => {
+      if (!user) return;
+      setDroppingCourse(courseId);
 
       try {
-        const params = new URLSearchParams({ userId });
-        const response = await fetch(`/api/courses?${params.toString()}`, {
-          signal: controller.signal,
+        const response = await fetch('/api/enroll', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId: user.id, courseId }),
         });
 
         if (!response.ok) {
           const result = await response.json().catch(() => ({}));
-          throw new Error(result?.message || 'Failed to load courses');
+          throw new Error(result?.message || 'Failed to drop course');
         }
 
-        const payload = (await response.json()) as {
-          courses: CourseRow[];
-          summary: CoursesSummary;
-        };
-
-        setCourses(payload.courses);
-        setSummary(payload.summary);
-      } catch (err: any) {
-        if (err.name === 'AbortError') return;
-        console.error('Courses fetch error', err);
-        setError(err.message || 'Failed to load courses');
         toast({
-          title: 'Unable to load courses',
-          description: err.message || 'Please try again shortly.',
+          title: 'Course dropped',
+          description: 'You have successfully dropped the course.',
+        });
+        await loadCourses();
+      } catch (err: any) {
+        console.error('Drop error', err);
+        toast({
+          title: 'Unable to drop course',
+          description: err.message || 'Please try again later.',
+          variant: 'destructive',
         });
       } finally {
-        setIsLoading(false);
+        setDroppingCourse(null);
       }
-    }
-
-    loadCourses();
-
-    return () => controller.abort();
-  }, [toast, user]);
+    },
+    [loadCourses, toast, user]
+  );
 
   const columns = useMemo(
     () => [
@@ -159,19 +191,22 @@ export default function CoursesPage() {
         ),
       },
       {
-        key: 'status',
-        title: 'Status',
-        render: (value: string) => (
-          <Badge
-            variant={value === 'enrolled' ? 'default' : 'secondary'}
-            className={value === 'enrolled' ? 'bg-emerald-600' : ''}
+        key: 'actions',
+        title: 'Actions',
+        render: (_: unknown, item: CourseRow) => (
+          <Button
+            size="sm"
+            variant="destructive"
+            disabled={droppingCourse === item.courseId}
+            onClick={() => handleDrop(item.courseId)}
           >
-            {value}
-          </Badge>
+            <Trash2 className="h-3 w-3 mr-1" />
+            {droppingCourse === item.courseId ? 'Dropping...' : 'Drop'}
+          </Button>
         ),
       },
     ],
-    []
+    [droppingCourse, handleDrop]
   );
 
   if (!user) {
@@ -191,11 +226,9 @@ export default function CoursesPage() {
             Manage your enrolled courses and view details
           </p>
         </div>
-        <Button className="bg-blue-600 hover:bg-blue-700" asChild>
-          <a href="/enroll">
-            <BookOpen className="h-4 w-4 mr-2" />
-            View All Available
-          </a>
+        <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => router.push("/enroll")}>
+          <BookOpen className="h-4 w-4 mr-2" />
+          View All Available
         </Button>
       </div>
 
