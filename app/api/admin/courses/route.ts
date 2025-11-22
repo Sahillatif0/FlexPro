@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { AUTH_COOKIE_NAME, getSessionFromToken } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
 
 async function requireAdminSession() {
   const token = cookies().get(AUTH_COOKIE_NAME)?.value;
@@ -15,6 +16,41 @@ async function requireAdminSession() {
   return { status: 200 as const };
 }
 
+const instructorSelect = Prisma.validator<Prisma.UserSelect>()({
+  id: true,
+  firstName: true,
+  lastName: true,
+  employeeId: true,
+});
+
+const courseSectionSelect = Prisma.validator<Prisma.CourseSectionSelect>()({
+  id: true,
+  name: true,
+  instructor: {
+    select: instructorSelect,
+  },
+});
+
+const courseSelect = Prisma.validator<Prisma.CourseSelect>()({
+  id: true,
+  code: true,
+  title: true,
+  department: true,
+  creditHours: true,
+  semester: true,
+  maxCapacity: true,
+  isActive: true,
+  createdAt: true,
+  sections: {
+    orderBy: { name: "asc" },
+    select: courseSectionSelect,
+  },
+});
+
+type CourseRecord = Prisma.CourseGetPayload<{ select: typeof courseSelect }>;
+type FacultySummary = Prisma.UserGetPayload<{ select: typeof instructorSelect }>;
+type SectionWithInstructor = Prisma.CourseSectionGetPayload<{ select: typeof courseSectionSelect }>;
+
 export async function GET(request: Request) {
   try {
     const session = await requireAdminSession();
@@ -26,52 +62,22 @@ export async function GET(request: Request) {
     const limitParam = Number(searchParams.get("limit"));
     const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 200) : 100;
 
-    const [courseRecords, facultyMembers] = await Promise.all([
+    const [courseRecords, facultyMembers] = (await Promise.all([
       prisma.course.findMany({
-        select: {
-          id: true,
-          code: true,
-          title: true,
-          department: true,
-          creditHours: true,
-          semester: true,
-          maxCapacity: true,
-          isActive: true,
-          createdAt: true,
-          sections: {
-            select: {
-              id: true,
-              name: true,
-              instructor: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  employeeId: true,
-                },
-              },
-            },
-            orderBy: { name: "asc" },
-          },
-        },
+        select: courseSelect,
         orderBy: { createdAt: "desc" },
         take: limit,
-      } as any),
+      }),
       prisma.user.findMany({
         where: { role: "faculty", isActive: true },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          employeeId: true,
-        },
+        select: instructorSelect,
         orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-      } as any),
-    ]);
+      }),
+    ])) as [CourseRecord[], FacultySummary[]];
 
     return NextResponse.json({
-      courses: (courseRecords as any[]).map((course: any) => {
-        const sections = Array.isArray(course.sections) ? (course.sections as any[]) : [];
+      courses: courseRecords.map((course) => {
+        const sections = course.sections ?? [];
         return {
           id: course.id,
           code: course.code,
@@ -82,7 +88,7 @@ export async function GET(request: Request) {
           maxCapacity: course.maxCapacity,
           isActive: course.isActive,
           createdAt: course.createdAt.toISOString(),
-          sections: sections.map((section: any) => ({
+          sections: sections.map((section) => ({
             id: section.id,
             name: section.name,
             instructor: section.instructor
@@ -100,7 +106,7 @@ export async function GET(request: Request) {
         id: instructor.id,
         fullName: `${instructor.firstName} ${instructor.lastName}`,
         employeeId: instructor.employeeId ?? null,
-      } as any)),
+      })),
     });
   } catch (error) {
     console.error("Admin courses fetch error", error);
@@ -178,7 +184,7 @@ export async function POST(request: Request) {
     if (uniqueSections.length) {
       await Promise.all(
         uniqueSections.map((sectionName) =>
-          (prisma as any).courseSection.create({
+          prisma.courseSection.create({
             data: {
               courseId: course.id,
               name: sectionName,
@@ -188,20 +194,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const sectionsForCourse = await (prisma as any).courseSection.findMany({
+    const sectionsForCourse: SectionWithInstructor[] = await prisma.courseSection.findMany({
       where: { courseId: course.id },
-      include: {
-        instructor: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            employeeId: true,
-          },
-        },
-      },
+      select: courseSectionSelect,
       orderBy: { name: "asc" },
-    } as any);
+    });
 
     return NextResponse.json({
       message: "Course created",
@@ -215,7 +212,7 @@ export async function POST(request: Request) {
         maxCapacity: course.maxCapacity,
         isActive: course.isActive,
         createdAt: course.createdAt.toISOString(),
-        sections: (sectionsForCourse as any[]).map((section: any) => ({
+        sections: sectionsForCourse.map((section) => ({
           id: section.id,
           name: section.name,
           instructor: section.instructor
@@ -224,7 +221,7 @@ export async function POST(request: Request) {
                 firstName: section.instructor.firstName,
                 lastName: section.instructor.lastName,
                 employeeId: section.instructor.employeeId ?? null,
-              } as any
+              }
             : null,
         })),
         },
