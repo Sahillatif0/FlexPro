@@ -151,11 +151,11 @@ export default function AdminCoursesPage() {
     setData((prev) =>
       prev
         ? {
-            ...prev,
-            courses: prev.courses.map((course) =>
-              course.id === updatedCourse.id ? updatedCourse : course
-            ),
-          }
+          ...prev,
+          courses: prev.courses.map((course) =>
+            course.id === updatedCourse.id ? updatedCourse : course
+          ),
+        }
         : prev
     );
   };
@@ -217,18 +217,18 @@ export default function AdminCoursesPage() {
       setData((prev) =>
         prev
           ? {
-              ...prev,
-              courses: prev.courses.map((item) =>
-                item.id === course.id
-                  ? {
-                      ...item,
-                      sections: item.sections
-                        .map((entry) => (entry.id === section.id ? updatedSection : entry))
-                        .sort((a, b) => a.name.localeCompare(b.name)),
-                    }
-                  : item
-              ),
-            }
+            ...prev,
+            courses: prev.courses.map((item) =>
+              item.id === course.id
+                ? {
+                  ...item,
+                  sections: item.sections
+                    .map((entry) => (entry.id === section.id ? updatedSection : entry))
+                    .sort((a, b) => a.name.localeCompare(b.name)),
+                }
+                : item
+            ),
+          }
           : prev
       );
 
@@ -297,18 +297,18 @@ export default function AdminCoursesPage() {
       setData((prev) =>
         prev
           ? {
-              ...prev,
-              courses: prev.courses.map((item) =>
-                item.id === course.id
-                  ? {
-                      ...item,
-                      sections: [...item.sections, newSection].sort((a, b) =>
-                        a.name.localeCompare(b.name)
-                      ),
-                    }
-                  : item
-              ),
-            }
+            ...prev,
+            courses: prev.courses.map((item) =>
+              item.id === course.id
+                ? {
+                  ...item,
+                  sections: [...item.sections, newSection].sort((a, b) =>
+                    a.name.localeCompare(b.name)
+                  ),
+                }
+                : item
+            ),
+          }
           : prev
       );
       setSectionDrafts((prev) => ({ ...prev, [course.id]: "" }));
@@ -349,16 +349,16 @@ export default function AdminCoursesPage() {
       setData((prev) =>
         prev
           ? {
-              ...prev,
-              courses: prev.courses.map((item) =>
-                item.id === course.id
-                  ? {
-                      ...item,
-                      sections: item.sections.filter((entry) => entry.id !== section.id),
-                    }
-                  : item
-              ),
-            }
+            ...prev,
+            courses: prev.courses.map((item) =>
+              item.id === course.id
+                ? {
+                  ...item,
+                  sections: item.sections.filter((entry) => entry.id !== section.id),
+                }
+                : item
+            ),
+          }
           : prev
       );
       toast({ title: "Section removed", description: `${section.name} is no longer linked to ${course.code}.` });
@@ -397,9 +397,9 @@ export default function AdminCoursesPage() {
       setData((prev) =>
         prev
           ? {
-              ...prev,
-              courses: prev.courses.filter((item) => item.id !== course.id),
-            }
+            ...prev,
+            courses: prev.courses.filter((item) => item.id !== course.id),
+          }
           : prev
       );
       toast({ title: "Course deleted", description: `${course.code} removed successfully.` });
@@ -467,9 +467,9 @@ export default function AdminCoursesPage() {
       setData((prev) =>
         prev
           ? {
-              ...prev,
-              courses: [result.course, ...prev.courses],
-            }
+            ...prev,
+            courses: [result.course, ...prev.courses],
+          }
           : prev
       );
 
@@ -786,8 +786,8 @@ export default function AdminCoursesPage() {
                         {pendingCourseId === course.id
                           ? "Updating..."
                           : course.isActive
-                          ? "Mark Inactive"
-                          : "Activate"}
+                            ? "Mark Inactive"
+                            : "Activate"}
                       </Button>
                       <Button
                         variant="ghost"
