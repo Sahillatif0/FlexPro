@@ -66,7 +66,7 @@ export async function GET(request: Request) {
           employeeId: true,
         },
         orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-      }),
+      } as any),
     ]);
 
     return NextResponse.json({
