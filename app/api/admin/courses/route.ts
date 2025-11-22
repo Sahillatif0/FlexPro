@@ -100,7 +100,7 @@ export async function GET(request: Request) {
         id: instructor.id,
         fullName: `${instructor.firstName} ${instructor.lastName}`,
         employeeId: instructor.employeeId ?? null,
-      })),
+      } as any)),
     });
   } catch (error) {
     console.error("Admin courses fetch error", error);
@@ -201,7 +201,7 @@ export async function POST(request: Request) {
         },
       },
       orderBy: { name: "asc" },
-    });
+    } as any);
 
     return NextResponse.json({
       message: "Course created",
@@ -224,7 +224,7 @@ export async function POST(request: Request) {
                 firstName: section.instructor.firstName,
                 lastName: section.instructor.lastName,
                 employeeId: section.instructor.employeeId ?? null,
-              }
+              } as any
             : null,
         })),
         },
