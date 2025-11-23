@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 import { AUTH_COOKIE_NAME } from '@/lib/auth';
-import { ROUTE_DYNAMIC, ROUTE_REVALIDATE, ROUTE_FETCH_CACHE } from '@/lib/route-config';
 
-export const dynamic = ROUTE_DYNAMIC;
-export const revalidate = ROUTE_REVALIDATE;
-export const fetchCache = ROUTE_FETCH_CACHE;
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 export async function POST() {
   const response = NextResponse.json({ message: 'Logout successful' }, { status: 200 });
