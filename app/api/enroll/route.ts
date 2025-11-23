@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+export { dynamic, revalidate, fetchCache } from '@/lib/route-config';
 
 const CREDIT_LIMIT = 21;
 

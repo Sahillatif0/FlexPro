@@ -1,23 +1,11 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { AUTH_COOKIE_NAME, getSessionFromToken } from "@/lib/auth";
-
-async function requireAdminSession() {
-  const token = cookies().get(AUTH_COOKIE_NAME)?.value;
-  const sessionUser = await getSessionFromToken(token);
-  if (!sessionUser) {
-    return { status: 401 as const, message: "Not authenticated" };
-  }
-  if (sessionUser.role !== "admin") {
-    return { status: 403 as const, message: "Forbidden" };
-  }
-  return { status: 200 as const };
-}
+import { requireAdmin } from "@/lib/auth";
+export { dynamic, revalidate, fetchCache } from "@/lib/route-config";
 
 export async function POST(request: Request, { params }: { params: { courseId: string } }) {
   try {
-    const session = await requireAdminSession();
+    const session = await requireAdmin(request);
     if (session.status !== 200) {
       return NextResponse.json({ message: session.message }, { status: session.status });
     }

@@ -117,6 +117,51 @@ export function signAuthToken(userId: string, ttlSeconds: number = AUTH_TOKEN_MA
   return `${data}.${signature}`;
 }
 
+function getCookieValue(header: string | null | undefined, name: string): string | undefined {
+  if (!header) {
+    return undefined;
+  }
+
+  const cookies = header.split(';');
+  for (const entry of cookies) {
+    const trimmed = entry.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    const separatorIndex = trimmed.indexOf('=');
+    if (separatorIndex === -1) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, separatorIndex).trim();
+    if (key !== name) {
+      continue;
+    }
+
+    const value = trimmed.slice(separatorIndex + 1);
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
+export function getAuthTokenFromRequest(request: Request): string | undefined {
+  return getCookieValue(request.headers.get('cookie'), AUTH_COOKIE_NAME);
+}
+
+export async function getSessionFromRequest(request: Request): Promise<User | null> {
+  const token = getAuthTokenFromRequest(request);
+  if (!token) {
+    return null;
+  }
+  return getSessionFromToken(token);
+}
+
 export async function validateCredentials(email: string, password: string): Promise<User | null> {
   try {
     const user = await prisma.user.findUnique({
@@ -166,3 +211,19 @@ export async function getSessionFromToken(token?: string | null): Promise<User |
 }
 
 export { toPublicUser };
+
+export type AdminSessionResult =
+  | { status: 200; user: User }
+  | { status: 401; message: string }
+  | { status: 403; message: string };
+
+export async function requireAdmin(request: Request): Promise<AdminSessionResult> {
+  const sessionUser = await getSessionFromRequest(request);
+  if (!sessionUser) {
+    return { status: 401, message: "Not authenticated" };
+  }
+  if (sessionUser.role !== "admin") {
+    return { status: 403, message: "Forbidden" };
+  }
+  return { status: 200, user: sessionUser };
+}

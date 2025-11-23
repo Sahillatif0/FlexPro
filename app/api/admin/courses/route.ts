@@ -1,20 +1,8 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { AUTH_COOKIE_NAME, getSessionFromToken } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
+export { dynamic, revalidate, fetchCache } from "@/lib/route-config";
 import { Prisma } from "@prisma/client";
-
-async function requireAdminSession() {
-  const token = cookies().get(AUTH_COOKIE_NAME)?.value;
-  const sessionUser = await getSessionFromToken(token);
-  if (!sessionUser) {
-    return { status: 401 as const, message: "Not authenticated" };
-  }
-  if (sessionUser.role !== "admin") {
-    return { status: 403 as const, message: "Forbidden" };
-  }
-  return { status: 200 as const };
-}
 
 const instructorSelect = Prisma.validator<Prisma.UserSelect>()({
   id: true,
@@ -56,7 +44,7 @@ type SectionWithInstructor = Prisma.CourseSectionGetPayload<{ select: typeof cou
 
 export async function GET(request: Request) {
   try {
-    const session = await requireAdminSession();
+    const session = await requireAdmin(request);
     if (session.status !== 200) {
       return NextResponse.json({ message: session.message }, { status: session.status });
     }
@@ -122,7 +110,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await requireAdminSession();
+    const session = await requireAdmin(request);
     if (session.status !== 200) {
       return NextResponse.json({ message: session.message }, { status: session.status });
     }

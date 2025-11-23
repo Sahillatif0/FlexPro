@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { AUTH_COOKIE_NAME, getSessionFromToken } from "@/lib/auth";
+import { getSessionFromRequest } from "@/lib/auth";
+export { dynamic, revalidate, fetchCache } from "@/lib/route-config";
 
 const DEFAULT_GRADE_POINTS: Record<string, number> = {
   "A+": 4.0,
@@ -20,8 +20,7 @@ const DEFAULT_GRADE_POINTS: Record<string, number> = {
 
 export async function GET(request: Request) {
   try {
-    const token = cookies().get(AUTH_COOKIE_NAME)?.value;
-    const sessionUser = await getSessionFromToken(token);
+    const sessionUser = await getSessionFromRequest(request);
 
     if (!sessionUser) {
       return NextResponse.json({ message: "Not authenticated" }, { status: 401 });
@@ -99,8 +98,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const token = cookies().get(AUTH_COOKIE_NAME)?.value;
-    const sessionUser = await getSessionFromToken(token);
+    const sessionUser = await getSessionFromRequest(request);
 
     if (!sessionUser) {
       return NextResponse.json({ message: "Not authenticated" }, { status: 401 });

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { loginSchema } from '@/lib/validation/auth';
 import { AUTH_COOKIE_NAME, AUTH_TOKEN_MAX_AGE, signAuthToken, toPublicUser } from '@/lib/auth';
+export { dynamic, revalidate, fetchCache } from '@/lib/route-config';
 
 export async function POST(request: Request) {
   try {

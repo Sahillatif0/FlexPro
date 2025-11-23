@@ -1,24 +1,12 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { AUTH_COOKIE_NAME, getSessionFromToken } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { adminStudentUpdateSchema } from "@/lib/validation/admin";
+export { dynamic, revalidate, fetchCache } from "@/lib/route-config";
 
-async function requireAdminSession() {
-  const token = cookies().get(AUTH_COOKIE_NAME)?.value;
-  const sessionUser = await getSessionFromToken(token);
-  if (!sessionUser) {
-    return { status: 401 as const, message: "Not authenticated" };
-  }
-  if (sessionUser.role !== "admin") {
-    return { status: 403 as const, message: "Forbidden" };
-  }
-  return { status: 200 as const };
-}
-
-export async function GET(_request: Request, { params }: { params: { studentId: string } }) {
+export async function GET(request: Request, { params }: { params: { studentId: string } }) {
   try {
-    const session = await requireAdminSession();
+    const session = await requireAdmin(request);
     if (session.status !== 200) {
       return NextResponse.json({ message: session.message }, { status: session.status });
     }
@@ -68,7 +56,7 @@ export async function GET(_request: Request, { params }: { params: { studentId: 
 
 export async function PATCH(request: Request, { params }: { params: { studentId: string } }) {
   try {
-    const session = await requireAdminSession();
+    const session = await requireAdmin(request);
     if (session.status !== 200) {
       return NextResponse.json({ message: session.message }, { status: session.status });
     }

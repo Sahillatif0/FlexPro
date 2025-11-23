@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+export { dynamic, revalidate, fetchCache } from "@/lib/route-config";
 
 export async function GET(request: Request) {
   try {
