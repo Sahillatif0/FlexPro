@@ -9,6 +9,8 @@ import {
   CalendarCheck,
   NotebookPen,
   GraduationCap,
+  FileWarning,
+  MessageCircle,
   Settings,
   LogOut,
   Menu,
@@ -19,6 +21,8 @@ const navigation = [
   { name: "Overview", href: "/faculty/dashboard", icon: LayoutDashboard },
   { name: "Attendance", href: "/faculty/attendance", icon: CalendarCheck },
   { name: "Marks", href: "/faculty/marks", icon: GraduationCap },
+  { name: "Grade Requests", href: "/faculty/grade-requests", icon: FileWarning },
+  { name: "Anonymous Feedback", href: "/faculty/feedback", icon: MessageCircle },
   { name: "Student Notes", href: "/faculty/students", icon: NotebookPen },
 ];
 

@@ -34,6 +34,13 @@ const navigation = [
   { name: 'Profile', href: '/profile', icon: User },
 ];
 
+const accentGradients = [
+  'from-blue-500/90 via-indigo-500/80 to-sky-500/80',
+  'from-emerald-500/85 via-teal-500/80 to-green-500/80',
+  'from-fuchsia-500/80 via-purple-500/80 to-pink-500/80',
+  'from-amber-500/85 via-orange-500/80 to-rose-500/80',
+];
+
 export function Sidebar() {
   const pathname = usePathname();
   const { sidebarCollapsed, toggleSidebar, user, logout } = useAppStore();
@@ -41,32 +48,44 @@ export function Sidebar() {
   return (
     <>
       {/* Mobile backdrop */}
-      <div className={cn(
-        "fixed inset-0 bg-black/50 z-40 lg:hidden",
-        sidebarCollapsed ? "hidden" : "block"
-      )} onClick={toggleSidebar} />
+      <div
+        className={cn(
+          'fixed inset-0 z-40 bg-black/55 backdrop-blur-sm lg:hidden',
+          sidebarCollapsed ? 'hidden' : 'block'
+        )}
+        onClick={toggleSidebar}
+      />
       
       {/* Sidebar */}
-      <div className={cn(
-        "fixed left-0 top-0 z-50 h-full w-64 bg-gray-900 border-r border-gray-800 transform transition-transform duration-300 lg:translate-x-0 lg:static lg:inset-0",
-        sidebarCollapsed ? "-translate-x-full lg:w-16" : "translate-x-0"
-      )}>
+      <aside
+        className={cn(
+          'fixed left-0 top-0 z-50 h-full w-72 border-r border-white/10 bg-[#050a16]/95 backdrop-blur-2xl shadow-[0_25px_80px_-45px_rgba(56,189,248,0.55)] transition-transform duration-300 lg:static lg:inset-0 lg:translate-x-0',
+          sidebarCollapsed ? '-translate-x-full lg:w-20' : 'translate-x-0'
+        )}
+        role="navigation"
+        aria-label="Student Portal"
+      >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-800">
+          <div className="flex items-center justify-between px-5 py-6 border-b border-white/10">
             {!sidebarCollapsed && (
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">F</span>
+              <div className="flex items-center space-x-3">
+                <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500/90 to-indigo-500/90 text-white font-semibold shadow-[0_10px_35px_-10px_rgba(59,130,246,0.8)]">
+                  <span>F</span>
                 </div>
-                <span className="text-white font-semibold text-lg">FlexPro</span>
+                <div>
+                  <p className="text-base font-semibold tracking-wide text-white">FlexPro</p>
+                  <p className="text-xs font-medium uppercase tracking-[0.3em] text-slate-400/80">
+                    Student Portal
+                  </p>
+                </div>
               </div>
             )}
             <Button
               variant="ghost"
               size="sm"
               onClick={toggleSidebar}
-              className="text-gray-400 hover:text-white lg:hidden"
+              className="text-slate-300/80 hover:text-white lg:hidden"
             >
               <Menu className="h-5 w-5" />
             </Button>
@@ -74,73 +93,103 @@ export function Sidebar() {
 
           {/* User info */}
           {user && !sidebarCollapsed && (
-            <div className="p-4 border-b border-gray-800">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
-                  <User className="h-5 w-5 text-gray-300" />
+            <div className="px-5 py-5 border-b border-white/10">
+              <div className="student-surface px-4 py-5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
+                    <User className="h-5 w-5 text-white/90" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-white">
+                      {user.firstName} {user.lastName}
+                    </p>
+                    <p className="truncate text-xs text-slate-300/70">
+                      {user.studentId}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">
-                    {user.firstName} {user.lastName}
-                  </p>
-                  <p className="text-xs text-gray-400 truncate">
-                    {user.role === 'faculty' ? user.employeeId ?? 'Faculty' : user.studentId}
-                  </p>
+                <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300/80">
+                  Semester {user.semester} · {user.program}
                 </div>
               </div>
             </div>
           )}
 
           {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-2">
-            {navigation.map((item) => {
+          <nav className="flex-1 space-y-2 px-4 py-6">
+            {navigation.map((item, index) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
+              const accent = accentGradients[index % accentGradients.length];
               
               return (
                 <Link
                   key={item.name}
                   href={item.href}
                   className={cn(
-                    "flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                    'group relative flex items-center overflow-hidden rounded-2xl px-4 py-3 text-sm font-medium tracking-wide transition-all',
+                    sidebarCollapsed && 'justify-center px-0',
                     isActive
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-300 hover:bg-gray-800 hover:text-white",
-                    sidebarCollapsed && "justify-center"
+                      ? cn('text-white shadow-[0_18px_45px_-30px_rgba(59,130,246,0.9)]', 'bg-gradient-to-r', accent)
+                      : 'text-slate-300/80 hover:text-white hover:bg-white/5'
                   )}
                 >
-                  <Icon className={cn("h-5 w-5", !sidebarCollapsed && "mr-3")} />
-                  {!sidebarCollapsed && item.name}
+                  <span
+                    className={cn(
+                      'flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-slate-200 transition-all',
+                      isActive && 'bg-white/15 text-white',
+                      !sidebarCollapsed && 'mr-3'
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  {!sidebarCollapsed && (
+                    <span className="relative z-[1]">{item.name}</span>
+                  )}
                 </Link>
               );
             })}
           </nav>
 
           {/* Footer */}
-          <div className="p-4 border-t border-gray-800 space-y-2">
+          <div className="space-y-2 border-t border-white/10 px-4 py-5">
             <Link
               href="/settings"
               className={cn(
-                "flex items-center px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-800 hover:text-white transition-colors",
-                sidebarCollapsed && "justify-center"
+                'flex items-center rounded-2xl px-4 py-3 text-sm font-medium text-slate-300/80 transition-all hover:bg-white/5 hover:text-white',
+                sidebarCollapsed && 'justify-center px-0'
               )}
             >
-              <Settings className={cn("h-5 w-5", !sidebarCollapsed && "mr-3")} />
-              {!sidebarCollapsed && "Settings"}
+              <span
+                className={cn(
+                  'flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-slate-200',
+                  !sidebarCollapsed && 'mr-3'
+                )}
+              >
+                <Settings className="h-4 w-4" />
+              </span>
+              {!sidebarCollapsed && 'Settings'}
             </Link>
             <button
               onClick={logout}
               className={cn(
-                "w-full flex items-center px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-800 hover:text-white transition-colors",
-                sidebarCollapsed && "justify-center"
+                'flex w-full items-center rounded-2xl px-4 py-3 text-sm font-medium text-slate-300/80 transition-all hover:bg-white/5 hover:text-white',
+                sidebarCollapsed && 'justify-center px-0'
               )}
             >
-              <LogOut className={cn("h-5 w-5", !sidebarCollapsed && "mr-3")} />
-              {!sidebarCollapsed && "Logout"}
+              <span
+                className={cn(
+                  'flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-slate-200',
+                  !sidebarCollapsed && 'mr-3'
+                )}
+              >
+                <LogOut className="h-4 w-4" />
+              </span>
+              {!sidebarCollapsed && 'Logout'}
             </button>
           </div>
         </div>
-      </div>
+      </aside>
     </>
   );
 }

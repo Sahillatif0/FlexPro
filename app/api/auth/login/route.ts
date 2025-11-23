@@ -4,6 +4,10 @@ import { prisma } from '@/lib/prisma';
 import { loginSchema } from '@/lib/validation/auth';
 import { AUTH_COOKIE_NAME, AUTH_TOKEN_MAX_AGE, signAuthToken, toPublicUser } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
