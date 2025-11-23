@@ -98,6 +98,7 @@ model Enrollment {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   course Course @relation(fields: [courseId], references: [id])
   term   Term   @relation(fields: [termId], references: [id])
+  studentMark StudentMark?
 
   @@unique([userId, courseId, termId])
   @@map("enrollments")
@@ -294,3 +295,29 @@ model StudentNote {
   @@unique([facultyId, studentId, courseId, termId, title])
   @@map("student_notes")
 }
+
+
+model StudentMark {
+  id          String   @id @default(cuid())
+  enrollmentId String  @unique
+  
+  assignment1 Float    @default(0)
+  assignment2 Float    @default(0)
+  quiz1       Float    @default(0)
+  quiz2       Float    @default(0)
+  quiz3       Float    @default(0)
+  quiz4       Float    @default(0)
+  mid1        Float    @default(0)
+  mid2        Float    @default(0)
+  finalExam   Float    @default(0)
+  graceMarks  Float    @default(0)
+  total       Float    @default(0) // Calculated total
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  enrollment  Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@map("student_marks")
+}
+
