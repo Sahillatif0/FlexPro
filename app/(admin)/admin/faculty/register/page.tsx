@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 export default function AdminFacultyRegisterPage() {
   const { toast } = useToast();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const form = useForm<AdminFacultyRegistrationInput>({
     resolver: zodResolver(adminFacultyRegistrationSchema),
@@ -44,6 +45,7 @@ export default function AdminFacultyRegisterPage() {
 
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
+    setSuccessMessage(null);
     try {
       const response = await fetch("/api/admin/faculty/register", {
         method: "POST",
@@ -63,6 +65,8 @@ export default function AdminFacultyRegisterPage() {
         description: `${result.faculty.fullName} (${result.faculty.employeeId}) has been created`,
       });
 
+      setSuccessMessage(`${result.faculty.fullName} (${result.faculty.employeeId}) has been created.`);
+
       reset({
         firstName: "",
         lastName: "",
@@ -77,6 +81,7 @@ export default function AdminFacultyRegisterPage() {
     } catch (error) {
       console.error("Faculty registration failed", error);
       setServerError("Unexpected error. Check console for details.");
+      setSuccessMessage(null);
     }
   });
 
@@ -93,6 +98,13 @@ export default function AdminFacultyRegisterPage() {
           Faculty onboarding
         </Badge>
       </div>
+
+      {successMessage ? (
+        <Alert className="border-emerald-500/40 bg-emerald-500/10 text-emerald-100">
+          <AlertTitle>Faculty added</AlertTitle>
+          <AlertDescription>{successMessage}</AlertDescription>
+        </Alert>
+      ) : null}
 
       {serverError ? (
         <Alert variant="destructive">

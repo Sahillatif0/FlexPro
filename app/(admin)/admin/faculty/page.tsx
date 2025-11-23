@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { GraduationCap, Mail, Plus, ShieldCheck } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -77,6 +78,7 @@ export default function AdminFacultyPage() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailSaving, setDetailSaving] = useState(false);
+  const [detailSuccess, setDetailSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -123,6 +125,7 @@ export default function AdminFacultyPage() {
       setDetailError(null);
       setDetail(null);
       setDetailForm(null);
+      setDetailSuccess(null);
       return;
     }
 
@@ -130,10 +133,15 @@ export default function AdminFacultyPage() {
     let cancelled = false;
 
     async function loadDetail() {
+      const normalizedId = selectedFacultyId?.trim();
+      if (!normalizedId) {
+        return;
+      }
       setDetailLoading(true);
       setDetailError(null);
+      setDetailSuccess(null);
       try {
-        const response = await fetch(`/api/admin/faculty/${selectedFacultyId}`, {
+        const response = await fetch(`/api/admin/faculty/${encodeURIComponent(normalizedId)}`, {
           signal: controller.signal,
         });
         const payload: FacultyDetailResponse = await response.json().catch(() => ({} as FacultyDetailResponse));
@@ -218,9 +226,15 @@ export default function AdminFacultyPage() {
       return;
     }
 
+    const normalizedId = member.id?.trim?.() ?? member.id;
+    if (!normalizedId) {
+      toast({ title: "Unable to update faculty", description: "Missing faculty identifier", variant: "destructive" });
+      return;
+    }
+
     try {
       setUpdatingFacultyId(member.id);
-      const response = await fetch(`/api/admin/faculty/${member.id}`, {
+      const response = await fetch(`/api/admin/faculty/${encodeURIComponent(normalizedId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: !member.isActive }),
@@ -286,6 +300,14 @@ export default function AdminFacultyPage() {
       return;
     }
 
+    const normalizedId = detail.id?.trim?.() ?? detail.id;
+    if (!normalizedId) {
+      toast({ title: "Update failed", description: "Missing faculty identifier", variant: "destructive" });
+      return;
+    }
+
+    setDetailSuccess(null);
+
     const payload: Record<string, unknown> = {};
     const trim = (value: string) => value.trim();
 
@@ -327,7 +349,8 @@ export default function AdminFacultyPage() {
 
     try {
       setDetailSaving(true);
-      const response = await fetch(`/api/admin/faculty/${detail.id}`, {
+      console.log(normalizedId)
+      const response = await fetch(`/api/admin/faculty/${encodeURIComponent(normalizedId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -363,6 +386,7 @@ export default function AdminFacultyPage() {
         department: updated.program,
         isActive: updated.isActive,
       });
+      setDetailSuccess(`${updated.firstName} ${updated.lastName}'s profile was saved successfully.`);
       toast({
         title: "Faculty updated",
         description: `${updated.firstName} ${updated.lastName}'s profile was saved successfully.`,
@@ -379,8 +403,8 @@ export default function AdminFacultyPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="space-y-8 lg:space-y-10">
+      <div className="flex flex-wrap items-start justify-between gap-5">
         <div>
           <h1 className="text-2xl font-semibold text-white">Faculty Directory</h1>
           <p className="text-sm text-gray-400">
@@ -404,9 +428,9 @@ export default function AdminFacultyPage() {
         </Alert>
       ) : null}
 
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader className="space-y-4 lg:flex lg:items-center lg:justify-between lg:space-y-0">
-          <CardTitle className="text-white flex items-center gap-2">
+      <Card className="rounded-3xl border border-white/10 bg-slate-950/75 backdrop-blur-xl shadow-xl shadow-purple-900/20">
+        <CardHeader className="flex flex-col gap-4 border-b border-white/10 px-6 py-6 lg:flex-row lg:items-center lg:justify-between">
+          <CardTitle className="flex items-center gap-2 text-white">
             <GraduationCap className="h-5 w-5 text-purple-400" />
             Faculty Members
           </CardTitle>
@@ -415,27 +439,35 @@ export default function AdminFacultyPage() {
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Search by name, email, or ID"
-              className="bg-gray-800 border-gray-700 text-white"
+              className="rounded-xl border border-white/10 bg-slate-950/70 text-white"
             />
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4 px-6 py-6">
           {isLoading || !data ? (
             <div className="space-y-3">
               {Array.from({ length: 6 }).map((_, index) => (
-                <Skeleton key={index} className="h-20 bg-gray-800" />
+                <Skeleton key={index} className="h-20 rounded-2xl bg-white/10" />
               ))}
             </div>
           ) : filteredFaculty.length ? (
             <div className="space-y-3">
-              {filteredFaculty.map((member) => (
-                <div key={member.id} className="rounded-lg bg-gray-800/60 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
+              {filteredFaculty.map((member) => {
+                const trimmedId = typeof member.id === "string" ? member.id.trim() : member.id;
+                const safeId = typeof trimmedId === "string" && trimmedId.length > 0 ? trimmedId : member.id;
+                const profileHref = safeId ? `/admin/faculty/${encodeURIComponent(safeId)}` : undefined;
+
+                return (
+                  <div
+                    key={member.id}
+                    className="rounded-2xl border border-white/10 bg-slate-950/60 p-5 shadow-lg shadow-purple-900/15 transition hover:border-purple-500/40 lg:p-6"
+                  >
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="space-y-1">
                       <p className="text-sm font-semibold text-white">
                         {member.firstName} {member.lastName}
                       </p>
-                      <div className="text-xs text-gray-400 flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
                         <span>{member.email}</span>
                         {member.employeeId ? <span>| ID {member.employeeId}</span> : null}
                         {member.department ? <span>| {member.department}</span> : null}
@@ -452,12 +484,12 @@ export default function AdminFacultyPage() {
                       {member.isActive ? "Active" : "Inactive"}
                     </Badge>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-400">
+                  <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-gray-400">
                     <span>Assigned sections: {member.totalSections}</span>
                     <span>|</span>
                     <span>Joined {new Date(member.joinedAt).toLocaleDateString()}</span>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-gray-400">
                     <Button
                       variant="outline"
                       size="sm"
@@ -477,21 +509,41 @@ export default function AdminFacultyPage() {
                       size="sm"
                       className="bg-purple-600/30 text-purple-200 hover:bg-purple-600/40"
                       onClick={() => {
-                        setSelectedFacultyId(member.id);
+                        if (!safeId) {
+                          toast({
+                            title: "Profile unavailable",
+                            description: "Faculty member is missing an identifier.",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+                        setSelectedFacultyId(safeId);
                         setIsDetailOpen(true);
                       }}
                     >
-                      View profile
+                      Quick view
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-gray-300 hover:text-white"
+                      asChild
+                      disabled={!profileHref}
+                    >
+                      <Link href={profileHref ?? "#"} aria-disabled={!profileHref}>
+                        Open profile
+                      </Link>
                     </Button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
               <GraduationCap className="h-10 w-10 text-gray-500" />
               <p className="text-sm text-gray-400">No faculty found matching your filters.</p>
-              <Button variant="outline" className="text-gray-300 border-gray-700" onClick={() => setSearchTerm("")}>
+              <Button variant="outline" className="border-white/10 text-gray-300" onClick={() => setSearchTerm("")}>
                 Clear search
               </Button>
             </div>
@@ -499,7 +551,7 @@ export default function AdminFacultyPage() {
         </CardContent>
       </Card>
 
-      <Alert className="border-purple-500/40 bg-purple-500/10 text-purple-200">
+      <Alert className="rounded-3xl border border-purple-500/40 bg-purple-500/10 text-purple-200">
         <Mail className="h-4 w-4" />
         <AlertTitle>Onboarding tip</AlertTitle>
         <AlertDescription>
@@ -511,6 +563,7 @@ export default function AdminFacultyPage() {
         open={isDetailOpen}
         onOpenChange={(open) => {
           setIsDetailOpen(open);
+          setDetailSuccess(null);
           if (!open) {
             setSelectedFacultyId(null);
           }
@@ -518,12 +571,12 @@ export default function AdminFacultyPage() {
       >
         <SheetContent
           side="right"
-          className="w-full border-l border-gray-800 bg-gray-950 text-gray-100 sm:max-w-3xl"
+          className="w-full border-l border-white/10 bg-slate-950/90 px-6 py-8 text-gray-100 shadow-2xl shadow-purple-900/20 backdrop-blur-xl sm:max-w-3xl"
         >
           {detailLoading ? (
             <div className="space-y-4">
               {Array.from({ length: 4 }).map((_, index) => (
-                <Skeleton key={index} className="h-16 bg-gray-800" />
+                <Skeleton key={index} className="h-16 rounded-2xl bg-white/10" />
               ))}
             </div>
           ) : detailError ? (
@@ -555,14 +608,20 @@ export default function AdminFacultyPage() {
                   {detail.email}
                 </SheetDescription>
               </SheetHeader>
+              {detailSuccess ? (
+                <Alert className="border-emerald-500/40 bg-emerald-500/10 text-emerald-100">
+                  <AlertTitle>Changes saved</AlertTitle>
+                  <AlertDescription>{detailSuccess}</AlertDescription>
+                </Alert>
+              ) : null}
               <ScrollArea className="flex-1 pr-3">
                 <div className="space-y-6 pb-6">
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="rounded-lg border border-gray-800 bg-gray-900/60 p-4 text-sm text-gray-300">
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm text-gray-300">
                       <p className="text-xs uppercase text-gray-500">Employee ID</p>
                       <p className="font-medium text-white">{detail.employeeId ?? "Not assigned"}</p>
                     </div>
-                    <div className="rounded-lg border border-gray-800 bg-gray-900/60 p-4 text-sm text-gray-300">
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm text-gray-300">
                       <p className="text-xs uppercase text-gray-500">Status</p>
                       <div className="mt-1 flex items-center gap-2">
                         <Badge
@@ -587,7 +646,7 @@ export default function AdminFacultyPage() {
                         <Input
                           value={detailForm.firstName}
                           onChange={(event) => handleDetailFieldChange("firstName", event.target.value)}
-                          className="bg-gray-800 border-gray-700 text-white"
+                          className="rounded-xl border border-white/10 bg-slate-950/70 text-white"
                         />
                       </div>
                       <div className="space-y-2">
@@ -595,7 +654,7 @@ export default function AdminFacultyPage() {
                         <Input
                           value={detailForm.lastName}
                           onChange={(event) => handleDetailFieldChange("lastName", event.target.value)}
-                          className="bg-gray-800 border-gray-700 text-white"
+                          className="rounded-xl border border-white/10 bg-slate-950/70 text-white"
                         />
                       </div>
                     </div>
@@ -606,7 +665,7 @@ export default function AdminFacultyPage() {
                           type="email"
                           value={detailForm.email}
                           onChange={(event) => handleDetailFieldChange("email", event.target.value)}
-                          className="bg-gray-800 border-gray-700 text-white"
+                          className="rounded-xl border border-white/10 bg-slate-950/70 text-white"
                         />
                       </div>
                       <div className="space-y-2">
@@ -614,7 +673,7 @@ export default function AdminFacultyPage() {
                         <Input
                           value={detailForm.employeeId}
                           onChange={(event) => handleDetailFieldChange("employeeId", event.target.value)}
-                          className="bg-gray-800 border-gray-700 text-white"
+                          className="rounded-xl border border-white/10 bg-slate-950/70 text-white"
                         />
                       </div>
                     </div>
@@ -623,7 +682,7 @@ export default function AdminFacultyPage() {
                       <Input
                         value={detailForm.department}
                         onChange={(event) => handleDetailFieldChange("department", event.target.value)}
-                        className="bg-gray-800 border-gray-700 text-white"
+                        className="rounded-xl border border-white/10 bg-slate-950/70 text-white"
                       />
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -632,7 +691,7 @@ export default function AdminFacultyPage() {
                         <Input
                           value={detailForm.phone}
                           onChange={(event) => handleDetailFieldChange("phone", event.target.value)}
-                          className="bg-gray-800 border-gray-700 text-white"
+                          className="rounded-xl border border-white/10 bg-slate-950/70 text-white"
                         />
                       </div>
                       <div className="space-y-2">
@@ -640,7 +699,7 @@ export default function AdminFacultyPage() {
                         <Input
                           value={detailForm.address}
                           onChange={(event) => handleDetailFieldChange("address", event.target.value)}
-                          className="bg-gray-800 border-gray-700 text-white"
+                          className="rounded-xl border border-white/10 bg-slate-950/70 text-white"
                         />
                       </div>
                     </div>
@@ -649,7 +708,7 @@ export default function AdminFacultyPage() {
                       <Textarea
                         value={detailForm.bio}
                         onChange={(event) => handleDetailFieldChange("bio", event.target.value)}
-                        className="bg-gray-800 border-gray-700 text-white"
+                        className="rounded-xl border border-white/10 bg-slate-950/70 text-white"
                         rows={4}
                         placeholder="Capture teaching interests, advising notes, or workload preferences."
                       />
@@ -673,6 +732,7 @@ export default function AdminFacultyPage() {
                       bio: detail.bio ?? "",
                       isActive: detail.isActive,
                     });
+                    setDetailSuccess(null);
                   }}
                   disabled={detailSaving}
                 >

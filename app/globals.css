@@ -189,6 +189,39 @@
     transform: translate3d(0, 0, 0);
   }
 
+  .admin-portal .bg-gray-900 {
+    background: rgba(15, 17, 26, 0.78) !important;
+    border-radius: 1.3rem;
+    border: 1px solid rgba(168, 85, 247, 0.18) !important;
+    backdrop-filter: blur(26px);
+    box-shadow: 0 28px 65px -38px rgba(129, 140, 248, 0.35);
+  }
+
+  .admin-portal .bg-gray-950 {
+    background: rgba(8, 9, 15, 0.82) !important;
+    border-radius: 1.2rem;
+    border: 1px solid rgba(76, 29, 149, 0.22) !important;
+    backdrop-filter: blur(24px);
+  }
+
+  .admin-portal .bg-gray-800 {
+    background: rgba(30, 41, 59, 0.72) !important;
+    border-radius: 1.1rem;
+    border: 1px solid rgba(148, 163, 184, 0.16) !important;
+  }
+
+  .admin-portal .border-gray-800 {
+    border-color: rgba(168, 85, 247, 0.24) !important;
+  }
+
+  .admin-portal .border-gray-700 {
+    border-color: rgba(129, 140, 248, 0.2) !important;
+  }
+
+  .admin-portal .hover\:bg-gray-800:hover {
+    background: rgba(59, 130, 246, 0.12) !important;
+  }
+
   .student-portal .bg-gray-800 {
     background: rgba(15, 23, 42, 0.78) !important;
     border-radius: 1rem;

@@ -107,12 +107,20 @@ export default function AdminPortalLayout({
   }
 
   return (
-    <div className="flex h-screen bg-gray-950">
+    <div className="relative flex min-h-screen bg-slate-950 text-slate-100">
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-32 -left-24 h-72 w-72 rounded-full bg-purple-600/25 blur-3xl" />
+        <div className="absolute top-1/3 -right-24 h-80 w-80 rounded-full bg-indigo-500/20 blur-3xl" />
+        <div className="absolute bottom-0 left-1/4 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl" />
+      </div>
+
       <AdminSidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
+
+      <div className="relative z-10 flex flex-1 flex-col overflow-hidden admin-portal">
         <AdminTopbar />
-        <main className="flex-1 overflow-y-auto p-6">
-          <div className="animate-fade-in">{children}</div>
+        <main className="relative flex-1 overflow-y-auto px-4 pb-10 pt-6 sm:px-6 lg:px-10">
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-6 mx-auto h-[540px] w-full max-w-6xl rounded-3xl bg-gradient-to-br from-purple-500/10 via-slate-900/40 to-transparent blur-3xl" />
+          <div className="relative z-10 mx-auto w-full max-w-6xl animate-fade-in space-y-8">{children}</div>
         </main>
       </div>
     </div>

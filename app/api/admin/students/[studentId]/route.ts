@@ -7,20 +7,33 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
-export async function GET(request: Request, { params }: { params: { studentId: string } }) {
+type StudentParams = { studentId: string };
+
+function resolveParams<T>(params: T | Promise<T>): Promise<T> {
+  return Promise.resolve(params);
+}
+
+export async function GET(
+  request: Request,
+  context: { params: StudentParams | Promise<StudentParams> }
+) {
   try {
     const session = await requireAdmin(request);
     if (session.status !== 200) {
       return NextResponse.json({ message: session.message }, { status: session.status });
     }
 
-    const { studentId } = params;
-    if (!studentId) {
+    const { studentId } = await resolveParams(context.params);
+    const slug = decodeURIComponent(studentId ?? "").trim();
+    if (!slug) {
       return NextResponse.json({ message: "Student id is required" }, { status: 400 });
     }
 
-    const student = await prisma.user.findUnique({
-      where: { id: studentId },
+    const student = await prisma.user.findFirst({
+      where: {
+        role: "student",
+        OR: [{ id: slug }, { studentId: slug }],
+      },
       select: {
         id: true,
         firstName: true,
@@ -41,7 +54,7 @@ export async function GET(request: Request, { params }: { params: { studentId: s
       },
     });
 
-    if (!student || student.role !== "student") {
+    if (!student) {
       return NextResponse.json({ message: "Student not found" }, { status: 404 });
     }
 
@@ -58,15 +71,19 @@ export async function GET(request: Request, { params }: { params: { studentId: s
   }
 }
 
-export async function PATCH(request: Request, { params }: { params: { studentId: string } }) {
+export async function PATCH(
+  request: Request,
+  context: { params: StudentParams | Promise<StudentParams> }
+) {
   try {
     const session = await requireAdmin(request);
     if (session.status !== 200) {
       return NextResponse.json({ message: session.message }, { status: session.status });
     }
 
-    const { studentId } = params;
-    if (!studentId) {
+    const { studentId } = await resolveParams(context.params);
+    const slug = decodeURIComponent(studentId ?? "").trim();
+    if (!slug) {
       return NextResponse.json({ message: "Student id is required" }, { status: 400 });
     }
 
@@ -82,14 +99,21 @@ export async function PATCH(request: Request, { params }: { params: { studentId:
 
     const data = parsed.data;
 
-    const target = await prisma.user.findUnique({ where: { id: studentId } });
-    if (!target || target.role !== "student") {
+    const target = await prisma.user.findFirst({
+      where: {
+        role: "student",
+        OR: [{ id: slug }, { studentId: slug }],
+      },
+    });
+    if (!target) {
       return NextResponse.json({ message: "Student not found" }, { status: 404 });
     }
 
+    const targetId = target.id;
+
     if (data.email && data.email !== target.email) {
       const emailConflict = await prisma.user.findFirst({
-        where: { email: data.email, NOT: { id: studentId } },
+        where: { email: data.email, NOT: { id: targetId } },
         select: { id: true },
       });
       if (emailConflict) {
@@ -99,7 +123,7 @@ export async function PATCH(request: Request, { params }: { params: { studentId:
 
     if (data.studentId && data.studentId !== target.studentId) {
       const idConflict = await prisma.user.findFirst({
-        where: { studentId: data.studentId, NOT: { id: studentId } },
+        where: { studentId: data.studentId, NOT: { id: targetId } },
         select: { id: true },
       });
       if (idConflict) {
@@ -127,7 +151,7 @@ export async function PATCH(request: Request, { params }: { params: { studentId:
     }
 
     const student = await prisma.user.update({
-      where: { id: studentId },
+      where: { id: targetId },
       data: updateData,
     });
 

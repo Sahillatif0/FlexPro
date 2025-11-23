@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,15 +17,20 @@ import {
   type AdminFacultyUpdateInput,
 } from "@/lib/validation/admin";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
-interface FacultyDetail extends Required<AdminFacultyUpdateInput> {
+interface FacultyDetail {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
   employeeId: string | null;
   department: string | null;
+  phone: string | null;
+  address: string | null;
+  bio: string | null;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -34,6 +39,7 @@ export default function AdminFacultyDetailPage() {
   const params = useParams<{ facultyId: string }>();
   const router = useRouter();
   const { toast } = useToast();
+  const facultyIdPath = (params?.facultyId ?? "").toString().trim();
 
   const [faculty, setFaculty] = useState<FacultyDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,6 +52,7 @@ export default function AdminFacultyDetailPage() {
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
@@ -54,13 +61,15 @@ export default function AdminFacultyDetailPage() {
   useEffect(() => {
     const controller = new AbortController();
     async function loadFaculty() {
-      if (!params?.facultyId) {
+      if (!facultyIdPath) {
+        setIsLoading(false);
+        setError("Faculty identifier missing");
         return;
       }
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch(`/api/admin/faculty/${params.facultyId}`, {
+        const response = await fetch(`/api/admin/faculty/${encodeURIComponent(facultyIdPath)}`, {
           signal: controller.signal,
         });
         const result = await response.json().catch(() => ({}));
@@ -91,14 +100,15 @@ export default function AdminFacultyDetailPage() {
 
     loadFaculty();
     return () => controller.abort();
-  }, [params?.facultyId, reset]);
+  }, [facultyIdPath, reset]);
 
   const onSubmit = handleSubmit(async (values) => {
-    if (!params?.facultyId) {
+    if (!facultyIdPath) {
+      toast({ title: "Update failed", description: "Faculty identifier missing", variant: "destructive" });
       return;
     }
     try {
-      const response = await fetch(`/api/admin/faculty/${params.facultyId}`, {
+      const response = await fetch(`/api/admin/faculty/${encodeURIComponent(facultyIdPath)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
@@ -209,14 +219,23 @@ export default function AdminFacultyDetailPage() {
                 <Input id="address" {...register("address")} />
               </Field>
               <Field label="Status" htmlFor="isActive" error={errors.isActive?.message}>
-                <select
-                  id="isActive"
-                  className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-200 focus:outline-none"
-                  {...register("isActive")}
-                >
-                  <option value="true">Active</option>
-                  <option value="false">Inactive</option>
-                </select>
+                <Controller
+                  control={control}
+                  name="isActive"
+                  render={({ field }) => (
+                    <div className="flex items-center gap-3 rounded-xl border border-gray-700 bg-gray-800/60 px-4 py-3">
+                      <Switch
+                        id="isActive"
+                        checked={Boolean(field.value)}
+                        onCheckedChange={(value) => field.onChange(value)}
+                        className="data-[state=checked]:bg-emerald-600"
+                      />
+                      <span className="text-sm text-gray-200">
+                        {field.value ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                  )}
+                />
               </Field>
             </div>
             <Field label="Bio" htmlFor="bio" error={errors.bio?.message} optional>

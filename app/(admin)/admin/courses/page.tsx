@@ -444,15 +444,15 @@ export default function AdminCoursesPage() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="space-y-8 lg:space-y-10">
+      <div className="flex flex-wrap items-start justify-between gap-5">
         <div>
           <h1 className="text-2xl font-semibold text-white">Course Catalog</h1>
           <p className="text-sm text-gray-400">
             Manage offerings, control publication status, and maintain section assignments.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             variant="outline"
             className="border-gray-700 text-gray-200 hover:text-white"
@@ -468,9 +468,9 @@ export default function AdminCoursesPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card className="border-gray-800 bg-gray-900">
-          <CardContent className="flex items-center gap-3 py-4 text-gray-200">
+      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+        <Card className="rounded-3xl border border-white/10 bg-slate-950/70 backdrop-blur-xl shadow-lg shadow-purple-900/10">
+          <CardContent className="flex items-center gap-4 px-5 py-5 text-gray-200">
             <GraduationCap className="h-10 w-10 rounded-lg bg-purple-600/20 p-2 text-purple-300" />
             <div>
               <p className="text-xs uppercase text-gray-400">Total courses</p>
@@ -478,8 +478,8 @@ export default function AdminCoursesPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-gray-800 bg-gray-900">
-          <CardContent className="flex items-center gap-3 py-4 text-gray-200">
+        <Card className="rounded-3xl border border-white/10 bg-slate-950/70 backdrop-blur-xl shadow-lg shadow-purple-900/10">
+          <CardContent className="flex items-center gap-4 px-5 py-5 text-gray-200">
             <Users className="h-10 w-10 rounded-lg bg-emerald-600/20 p-2 text-emerald-300" />
             <div>
               <p className="text-xs uppercase text-gray-400">Active offerings</p>
@@ -487,8 +487,8 @@ export default function AdminCoursesPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-gray-800 bg-gray-900">
-          <CardContent className="flex items-center gap-3 py-4 text-gray-200">
+        <Card className="rounded-3xl border border-white/10 bg-slate-950/70 backdrop-blur-xl shadow-lg shadow-purple-900/10">
+          <CardContent className="flex items-center gap-4 px-5 py-5 text-gray-200">
             <ListChecks className="h-10 w-10 rounded-lg bg-blue-600/20 p-2 text-blue-300" />
             <div>
               <p className="text-xs uppercase text-gray-400">Sections tracked</p>
@@ -505,8 +505,8 @@ export default function AdminCoursesPage() {
         </Alert>
       ) : null}
 
-      <Card className="border-gray-800 bg-gray-900">
-        <CardHeader className="space-y-4 lg:flex lg:items-center lg:justify-between lg:space-y-0">
+      <Card className="rounded-3xl border border-white/10 bg-slate-950/75 backdrop-blur-xl shadow-xl shadow-purple-900/20">
+        <CardHeader className="flex flex-col gap-4 border-b border-white/10 px-6 py-6 lg:flex-row lg:items-center lg:justify-between">
           <CardTitle className="flex items-center gap-2 text-white">
             <BookMarked className="h-5 w-5 text-purple-400" />
             Existing Courses
@@ -515,28 +515,28 @@ export default function AdminCoursesPage() {
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             placeholder="Search by code, title, or department"
-            className="w-full max-w-xs border-gray-700 bg-gray-800 text-white"
+            className="w-full max-w-xs rounded-xl border border-white/10 bg-slate-950/70 text-white"
           />
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4 px-6 py-6">
           {isLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 6 }).map((_, index) => (
-                <Skeleton key={index} className="h-20 w-full bg-gray-800" />
+                <Skeleton key={index} className="h-20 w-full rounded-2xl bg-white/10" />
               ))}
             </div>
           ) : filteredCourses.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-gray-700 p-10 text-center text-sm text-gray-400">
+            <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 p-10 text-center text-sm text-gray-400">
               No courses match this filter. Try a different search term.
             </div>
           ) : (
             filteredCourses.map((course) => (
               <div
                 key={course.id}
-                className="rounded-lg border border-gray-800 bg-gray-950/60 p-4 transition hover:border-purple-600/60"
+                className="rounded-2xl border border-white/10 bg-slate-950/60 p-5 shadow-lg shadow-purple-900/15 transition hover:border-purple-500/50 lg:p-6"
               >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-white">{course.code}</p>
                       <Badge variant={course.isActive ? "default" : "secondary"}>
@@ -555,7 +555,7 @@ export default function AdminCoursesPage() {
                       className="border-gray-700 text-gray-200 hover:text-white"
                       onClick={() => handleOpenDetails(course)}
                     >
-                      View details
+                      Quick view
                     </Button>
                     <Button
                       size="sm"
@@ -574,10 +574,18 @@ export default function AdminCoursesPage() {
                     >
                       Delete
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-gray-300 hover:text-white"
+                      asChild
+                    >
+                      <Link href={`/admin/courses/${course.id}`}>Open page</Link>
+                    </Button>
                   </div>
                 </div>
-                <Separator className="my-3 border-gray-800" />
-                <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
+                <Separator className="my-4 border-white/10" />
+                <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
                   <span>{course.sections.length} section(s)</span>
                   <span>Max capacity: {course.maxCapacity}</span>
                   <span>
@@ -604,7 +612,10 @@ export default function AdminCoursesPage() {
           }
         }}
       >
-        <SheetContent side="right" className="w-full overflow-y-auto border-gray-800 bg-gray-950/95 text-gray-100 sm:max-w-xl">
+        <SheetContent
+          side="right"
+          className="w-full overflow-y-auto border-l border-white/10 bg-slate-950/90 px-6 py-8 text-slate-100 shadow-2xl shadow-purple-900/20 backdrop-blur-xl sm:max-w-xl"
+        >
           {selectedCourse ? (
             <div className="space-y-6">
               <SheetHeader>
@@ -614,13 +625,13 @@ export default function AdminCoursesPage() {
                 </SheetDescription>
               </SheetHeader>
 
-              <div className="rounded-lg border border-gray-800 bg-gray-900 p-4 text-sm text-gray-300">
+              <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-200 shadow-inner shadow-purple-900/10">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                   <Badge variant={selectedCourse.isActive ? "default" : "secondary"}>
                     {selectedCourse.isActive ? "Published" : "Draft"}
                   </Badge>
                 </div>
-                <div className="grid gap-2">
+                <div className="grid gap-2 text-sm">
                   <p>
                     Credit hours: <span className="text-white">{selectedCourse.creditHours}</span>
                   </p>
@@ -651,7 +662,7 @@ export default function AdminCoursesPage() {
                       onChange={(event) =>
                         handleSectionDraftChange(selectedCourse.id, event.target.value)
                       }
-                      className="h-9 w-40 border-gray-700 bg-gray-900 text-white"
+                      className="h-9 w-40 rounded-xl border border-white/10 bg-slate-950/70 text-white"
                     />
                     <Button
                       size="sm"
@@ -662,17 +673,20 @@ export default function AdminCoursesPage() {
                     </Button>
                   </div>
                 </div>
-                <ScrollArea className="h-[320px] rounded-md border border-gray-800 bg-gray-900">
+                <ScrollArea className="h-[320px] rounded-2xl border border-white/10 bg-slate-950/70">
                   <div className="space-y-2 p-3">
                     {selectedCourse.sections.length === 0 ? (
-                      <div className="rounded-md border border-dashed border-gray-700 p-6 text-center text-xs text-gray-400">
+                      <div className="rounded-2xl border border-dashed border-white/20 bg-white/5 p-6 text-center text-xs text-slate-300">
                         No sections yet. Create one to start assigning instructors.
                       </div>
                     ) : (
                       selectedCourse.sections.map((section) => {
                         const value = section.instructor ? section.instructor.id : "unassigned";
                         return (
-                          <div key={section.id} className="rounded-md border border-gray-800 bg-gray-950/70 p-3">
+                          <div
+                            key={section.id}
+                            className="rounded-xl border border-white/10 bg-slate-950/70 p-3 shadow-inner shadow-purple-900/5"
+                          >
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div>
                                 <p className="text-sm font-semibold text-white">{section.name}</p>
@@ -698,10 +712,10 @@ export default function AdminCoursesPage() {
                                   }
                                   disabled={assigningSectionId === section.id}
                                 >
-                                  <SelectTrigger className="h-9 w-44 border-gray-700 bg-gray-900 text-white">
+                                  <SelectTrigger className="h-9 w-44 rounded-xl border border-white/10 bg-slate-950/70 text-white">
                                     <SelectValue placeholder="Assign instructor" />
                                   </SelectTrigger>
-                                  <SelectContent className="border-gray-800 bg-gray-950 text-white">
+                                  <SelectContent className="border-white/10 bg-slate-950/95 text-white">
                                     <SelectItem value="unassigned">Unassigned</SelectItem>
                                     {instructors.map((option) => (
                                       <SelectItem key={option.id} value={option.id}>

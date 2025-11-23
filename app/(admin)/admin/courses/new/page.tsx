@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import { ArrowLeft, BookMarked, Info } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -20,22 +19,24 @@ const departments = [
   "Humanities",
 ];
 
+const createInitialFormState = () => ({
+  code: "",
+  title: "",
+  description: "",
+  creditHours: "3",
+  department: departments[0],
+  semester: "1",
+  prerequisite: "",
+  maxCapacity: "40",
+  sections: "",
+});
+
 export default function AdminCreateCoursePage() {
-  const router = useRouter();
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    code: "",
-    title: "",
-    description: "",
-    creditHours: "3",
-    department: departments[0],
-    semester: "1",
-    prerequisite: "",
-    maxCapacity: "40",
-    sections: "",
-  });
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [form, setForm] = useState(createInitialFormState());
 
   const disabled = useMemo(() => {
     return !form.code.trim() || !form.title.trim() || Number(form.creditHours) <= 0;
@@ -69,6 +70,7 @@ export default function AdminCreateCoursePage() {
     try {
       setIsSaving(true);
       setError(null);
+      setSuccessMessage(null);
       const response = await fetch("/api/admin/courses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -83,7 +85,9 @@ export default function AdminCreateCoursePage() {
         title: "Course created",
         description: `${payload.code} has been added successfully.`,
       });
-      router.push("/admin/courses");
+
+      setSuccessMessage(`${payload.code} has been cataloged successfully.`);
+      setForm(createInitialFormState());
     } catch (err: any) {
       setError(err?.message ?? "Unexpected error while creating the course");
     } finally {
@@ -119,6 +123,13 @@ export default function AdminCreateCoursePage() {
           You can add more sections or assign instructors later from the course drawer. Keep descriptions concise so they surface well in the student portal.
         </AlertDescription>
       </Alert>
+
+      {successMessage ? (
+        <Alert className="border-emerald-500/40 bg-emerald-500/10 text-emerald-100">
+          <AlertTitle>Course added</AlertTitle>
+          <AlertDescription>{successMessage}</AlertDescription>
+        </Alert>
+      ) : null}
 
       <Card className="bg-gray-900 border-gray-800">
         <CardHeader>
@@ -256,17 +267,10 @@ export default function AdminCreateCoursePage() {
                 type="button"
                 variant="ghost"
                 className="text-gray-300 hover:text-white"
-                onClick={() => setForm({
-                  code: "",
-                  title: "",
-                  description: "",
-                  creditHours: "3",
-                  department: departments[0],
-                  semester: "1",
-                  prerequisite: "",
-                  maxCapacity: "40",
-                  sections: "",
-                })}
+                onClick={() => {
+                  setSuccessMessage(null);
+                  setForm(createInitialFormState());
+                }}
                 disabled={isSaving}
               >
                 Clear form

@@ -7,20 +7,33 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
-export async function GET(request: Request, { params }: { params: { facultyId: string } }) {
+type FacultyParams = { facultyId: string };
+
+function resolveParams<T>(params: T | Promise<T>): Promise<T> {
+  return Promise.resolve(params);
+}
+
+export async function GET(
+  request: Request,
+  context: { params: FacultyParams | Promise<FacultyParams> }
+) {
   try {
     const session = await requireAdmin(request);
     if (session.status !== 200) {
       return NextResponse.json({ message: session.message }, { status: session.status });
     }
 
-    const { facultyId } = params;
-    if (!facultyId) {
+    const { facultyId } = await resolveParams(context.params);
+    const slug = decodeURIComponent(facultyId ?? "").trim();
+    if (!slug) {
       return NextResponse.json({ message: "Faculty id is required" }, { status: 400 });
     }
 
-    const faculty = await prisma.user.findUnique({
-      where: { id: facultyId },
+    const faculty = await prisma.user.findFirst({
+      where: {
+        role: "faculty",
+        OR: [{ id: slug }, { employeeId: slug }, { studentId: slug }],
+      },
       select: {
         id: true,
         firstName: true,
@@ -38,7 +51,7 @@ export async function GET(request: Request, { params }: { params: { facultyId: s
       },
     });
 
-    if (!faculty || faculty.role !== "faculty") {
+    if (!faculty) {
       return NextResponse.json({ message: "Faculty member not found" }, { status: 404 });
     }
 
@@ -55,15 +68,20 @@ export async function GET(request: Request, { params }: { params: { facultyId: s
   }
 }
 
-export async function PATCH(request: Request, { params }: { params: { facultyId: string } }) {
+
+export async function PATCH(
+  request: Request,
+  context: { params: FacultyParams | Promise<FacultyParams> }
+) {
   try {
     const session = await requireAdmin(request);
     if (session.status !== 200) {
       return NextResponse.json({ message: session.message }, { status: session.status });
     }
 
-    const { facultyId } = params;
-    if (!facultyId) {
+    const { facultyId } = await resolveParams(context.params);
+    const slug = decodeURIComponent(facultyId ?? "").trim();
+    if (!slug) {
       return NextResponse.json({ message: "Faculty id is required" }, { status: 400 });
     }
 
@@ -79,14 +97,21 @@ export async function PATCH(request: Request, { params }: { params: { facultyId:
 
     const data = parsed.data;
 
-    const target = await prisma.user.findUnique({ where: { id: facultyId } });
-    if (!target || target.role !== "faculty") {
+    const target = await prisma.user.findFirst({
+      where: {
+        role: "faculty",
+        OR: [{ id: slug }, { employeeId: slug }, { studentId: slug }],
+      },
+    });
+    if (!target) {
       return NextResponse.json({ message: "Faculty member not found" }, { status: 404 });
     }
 
+    const targetId = target.id;
+
     if (data.email && data.email !== target.email) {
       const emailConflict = await prisma.user.findFirst({
-        where: { email: data.email, NOT: { id: facultyId } },
+        where: { email: data.email, NOT: { id: targetId } },
         select: { id: true },
       });
       if (emailConflict) {
@@ -98,7 +123,7 @@ export async function PATCH(request: Request, { params }: { params: { facultyId:
       const idConflict = await prisma.user.findFirst({
         where: {
           OR: [{ employeeId: data.employeeId }, { studentId: data.employeeId }],
-          NOT: { id: facultyId },
+          NOT: { id: targetId },
         },
         select: { id: true },
       });
@@ -127,7 +152,7 @@ export async function PATCH(request: Request, { params }: { params: { facultyId:
     }
 
     const faculty = await prisma.user.update({
-      where: { id: facultyId },
+      where: { id: targetId },
       data: updateData,
     });
 

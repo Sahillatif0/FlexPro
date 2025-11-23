@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 export default function AdminStudentRegisterPage() {
   const { toast } = useToast();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const form = useForm<AdminStudentRegistrationInput>({
     resolver: zodResolver(adminStudentRegistrationSchema),
@@ -47,6 +48,7 @@ export default function AdminStudentRegisterPage() {
 
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
+    setSuccessMessage(null);
     try {
       const response = await fetch("/api/admin/students/register", {
         method: "POST",
@@ -66,6 +68,8 @@ export default function AdminStudentRegisterPage() {
         description: `${result.student.fullName} (${result.student.studentId}) has been created`,
       });
 
+      setSuccessMessage(`${result.student.fullName} (${result.student.studentId}) has been created.`);
+
       reset({
         firstName: "",
         lastName: "",
@@ -83,6 +87,7 @@ export default function AdminStudentRegisterPage() {
     } catch (error) {
       console.error("Student registration failed", error);
       setServerError("Unexpected error. Check console for details.");
+      setSuccessMessage(null);
     }
   });
 
@@ -99,6 +104,13 @@ export default function AdminStudentRegisterPage() {
           Registrar tools
         </Badge>
       </div>
+
+      {successMessage ? (
+        <Alert className="border-emerald-500/40 bg-emerald-500/10 text-emerald-100">
+          <AlertTitle>Student added</AlertTitle>
+          <AlertDescription>{successMessage}</AlertDescription>
+        </Alert>
+      ) : null}
 
       {serverError ? (
         <Alert variant="destructive">

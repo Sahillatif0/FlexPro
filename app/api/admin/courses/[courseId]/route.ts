@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
+import { adminCourseUpdateSchema } from "@/lib/validation/course";
+import { Prisma } from "@prisma/client";
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
-import { adminCourseUpdateSchema } from "@/lib/validation/course";
-import { Prisma } from "@prisma/client";
 
 const instructorSelect = Prisma.validator<Prisma.UserSelect>()({
   id: true,
@@ -73,20 +73,30 @@ function mapCourse(course: CourseRecord) {
   };
 }
 
-export async function GET(request: Request, { params }: { params: { courseId: string } }) {
+type CourseParams = { courseId: string };
+
+function resolveParams<T>(params: T | Promise<T>): Promise<T> {
+  return Promise.resolve(params);
+}
+
+export async function GET(
+  request: Request,
+  context: { params: CourseParams | Promise<CourseParams> }
+) {
   try {
     const session = await requireAdmin(request);
     if (session.status !== 200) {
       return NextResponse.json({ message: session.message }, { status: session.status });
     }
 
-    const { courseId } = params;
-    if (!courseId) {
+    const { courseId } = await resolveParams(context.params);
+    const slug = decodeURIComponent(courseId ?? "").trim();
+    if (!slug) {
       return NextResponse.json({ message: "Course id is required" }, { status: 400 });
     }
 
     const course = await prisma.course.findUnique({
-      where: { id: courseId },
+      where: { id: slug },
       select: courseSelect,
     });
 
@@ -101,15 +111,19 @@ export async function GET(request: Request, { params }: { params: { courseId: st
   }
 }
 
-export async function PATCH(request: Request, { params }: { params: { courseId: string } }) {
+export async function PATCH(
+  request: Request,
+  context: { params: CourseParams | Promise<CourseParams> }
+) {
   try {
     const session = await requireAdmin(request);
     if (session.status !== 200) {
       return NextResponse.json({ message: session.message }, { status: session.status });
     }
 
-    const { courseId } = params;
-    if (!courseId) {
+    const { courseId } = await resolveParams(context.params);
+    const slug = decodeURIComponent(courseId ?? "").trim();
+    if (!slug) {
       return NextResponse.json({ message: "Course id is required" }, { status: 400 });
     }
 
@@ -126,7 +140,7 @@ export async function PATCH(request: Request, { params }: { params: { courseId: 
     const data = parsed.data;
 
     const courseExists = await prisma.course.findUnique({
-      where: { id: courseId },
+      where: { id: slug },
       select: { id: true },
     });
 
@@ -150,7 +164,7 @@ export async function PATCH(request: Request, { params }: { params: { courseId: 
     }
 
     const course = await prisma.course.update({
-      where: { id: courseId },
+      where: { id: slug },
       data: updateData,
       select: courseSelect,
     });
@@ -162,19 +176,23 @@ export async function PATCH(request: Request, { params }: { params: { courseId: 
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { courseId: string } }) {
+export async function DELETE(
+  request: Request,
+  context: { params: CourseParams | Promise<CourseParams> }
+) {
   try {
     const session = await requireAdmin(request);
     if (session.status !== 200) {
       return NextResponse.json({ message: session.message }, { status: session.status });
     }
 
-    const { courseId } = params;
-    if (!courseId) {
+    const { courseId } = await resolveParams(context.params);
+    const slug = decodeURIComponent(courseId ?? "").trim();
+    if (!slug) {
       return NextResponse.json({ message: "Course id is required" }, { status: 400 });
     }
 
-    await prisma.course.delete({ where: { id: courseId } });
+    await prisma.course.delete({ where: { id: slug } });
     return NextResponse.json({ message: "Course deleted" });
   } catch (error) {
     console.error("Admin delete course error", error);

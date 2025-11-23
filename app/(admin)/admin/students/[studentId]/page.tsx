@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,36 +11,50 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import {
   adminStudentUpdateSchema,
   type AdminStudentUpdateInput,
 } from "@/lib/validation/admin";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 
-interface StudentDetail extends Required<AdminStudentUpdateInput> {
+interface StudentDetail {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
   studentId: string;
-  program: string;
+  program: string | null;
   semester: number;
-  section: string;
-  cgpa: number;
+  section: string | null;
+  cgpa: number | null;
+  phone: string | null;
+  address: string | null;
+  bio: string | null;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+interface CoursesPayload {
+  courses?: Array<{
+    id: string;
+    title: string;
+    sections?: Array<{ id: string; name: string | null }>;
+  }>;
 }
 
 export default function AdminStudentDetailPage() {
   const params = useParams<{ studentId: string }>();
   const router = useRouter();
   const { toast } = useToast();
+  const studentIdPath = (params?.studentId ?? "").toString().trim();
 
   const [student, setStudent] = useState<StudentDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sectionOptions, setSectionOptions] = useState<string[]>([]);
 
   const form = useForm<AdminStudentUpdateInput>({
     resolver: zodResolver(adminStudentUpdateSchema),
@@ -49,21 +63,59 @@ export default function AdminStudentDetailPage() {
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors, isSubmitting },
   } = form;
 
   useEffect(() => {
     const controller = new AbortController();
+
+    async function loadSections() {
+      try {
+        const response = await fetch("/api/admin/courses?limit=200", {
+          signal: controller.signal,
+        });
+        const result: CoursesPayload = await response.json().catch(() => ({ courses: [] }));
+        if (!response.ok) {
+          return;
+        }
+        const unique = new Set<string>();
+        for (const course of result.courses ?? []) {
+          for (const section of course.sections ?? []) {
+            if (section?.name) {
+              unique.add(section.name);
+            }
+          }
+        }
+        setSectionOptions(Array.from(unique).sort((a, b) => a.localeCompare(b)));
+      } catch (err: any) {
+        if (err?.name === "AbortError") {
+          return;
+        }
+        console.error("Section suggestion load failed", err);
+      }
+    }
+
+    loadSections();
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
     async function loadStudent() {
-      if (!params?.studentId) {
+      if (!studentIdPath) {
+        setIsLoading(false);
+        setError("Student identifier missing");
         return;
       }
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch(`/api/admin/students/${params.studentId}`, {
+        const response = await fetch(`/api/admin/students/${encodeURIComponent(studentIdPath)}`, {
           signal: controller.signal,
         });
         const result = await response.json().catch(() => ({}));
@@ -76,10 +128,10 @@ export default function AdminStudentDetailPage() {
           lastName: result.student.lastName,
           email: result.student.email,
           studentId: result.student.studentId,
-          program: result.student.program,
+          program: result.student.program ?? undefined,
           semester: result.student.semester,
-          section: result.student.section,
-          cgpa: result.student.cgpa,
+          section: result.student.section ?? undefined,
+          cgpa: result.student.cgpa ?? undefined,
           phone: result.student.phone ?? undefined,
           address: result.student.address ?? undefined,
           bio: result.student.bio ?? undefined,
@@ -97,14 +149,15 @@ export default function AdminStudentDetailPage() {
 
     loadStudent();
     return () => controller.abort();
-  }, [params?.studentId, reset]);
+  }, [studentIdPath, reset]);
 
   const onSubmit = handleSubmit(async (values) => {
-    if (!params?.studentId) {
+    if (!studentIdPath) {
+      toast({ title: "Update failed", description: "Student identifier missing", variant: "destructive" });
       return;
     }
     try {
-      const response = await fetch(`/api/admin/students/${params.studentId}`, {
+      const response = await fetch(`/api/admin/students/${encodeURIComponent(studentIdPath)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
@@ -126,10 +179,10 @@ export default function AdminStudentDetailPage() {
             }
           : prev
       );
-    } catch (error: any) {
+    } catch (err: any) {
       toast({
         title: "Update failed",
-        description: error?.message || "Unexpected error",
+        description: err?.message || "Unexpected error",
         variant: "destructive",
       });
     }
@@ -142,9 +195,7 @@ export default function AdminStudentDetailPage() {
     return (
       <Badge
         variant="secondary"
-        className={cn(
-          student.isActive ? "bg-emerald-600/20 text-emerald-300" : "bg-gray-600/20 text-gray-300"
-        )}
+        className={student.isActive ? "bg-emerald-600/20 text-emerald-300" : "bg-gray-600/20 text-gray-300"}
       >
         {student.isActive ? "Active" : "Inactive"}
       </Badge>
@@ -173,9 +224,11 @@ export default function AdminStudentDetailPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-white">{student.firstName} {student.lastName}</h1>
+          <h1 className="text-2xl font-semibold text-white">
+            {student.firstName} {student.lastName}
+          </h1>
           <p className="text-sm text-gray-400">
-            Student ID {student.studentId} · Created {new Date(student.createdAt).toLocaleDateString()} · Updated {new Date(student.updatedAt).toLocaleString()}
+            {student.studentId} · Created {new Date(student.createdAt).toLocaleDateString()} · Updated {new Date(student.updatedAt).toLocaleString()}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -209,13 +262,26 @@ export default function AdminStudentDetailPage() {
                 <Input id="program" {...register("program")} />
               </Field>
               <Field label="Semester" htmlFor="semester" error={errors.semester?.message}>
-                <Input id="semester" type="number" min={1} max={12} {...register("semester", { valueAsNumber: true })} />
+                <Input
+                  id="semester"
+                  type="number"
+                  min={1}
+                  max={12}
+                  {...register("semester", { valueAsNumber: true })}
+                />
               </Field>
-              <Field label="Section" htmlFor="section" error={errors.section?.message}>
-                <Input id="section" {...register("section")} />
+              <Field label="CGPA" htmlFor="cgpa" error={errors.cgpa?.message} optional>
+                <Input
+                  id="cgpa"
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  max={4}
+                  {...register("cgpa", { valueAsNumber: true })}
+                />
               </Field>
-              <Field label="CGPA" htmlFor="cgpa" error={errors.cgpa?.message}>
-                <Input id="cgpa" type="number" step="0.01" min={0} max={4} {...register("cgpa", { valueAsNumber: true })} />
+              <Field label="Section" htmlFor="section" error={errors.section?.message} optional>
+                <Input id="section" placeholder="e.g. Section A" {...register("section")} />
               </Field>
               <Field label="Phone" htmlFor="phone" error={errors.phone?.message} optional>
                 <Input id="phone" {...register("phone")} />
@@ -224,24 +290,54 @@ export default function AdminStudentDetailPage() {
                 <Input id="address" {...register("address")} />
               </Field>
               <Field label="Status" htmlFor="isActive" error={errors.isActive?.message}>
-                <select
-                  id="isActive"
-                  className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-200 focus:outline-none"
-                  {...register("isActive")}
-                >
-                  <option value="true">Active</option>
-                  <option value="false">Inactive</option>
-                </select>
+                <Controller
+                  control={control}
+                  name="isActive"
+                  render={({ field }) => (
+                    <div className="flex items-center gap-3 rounded-xl border border-gray-700 bg-gray-800/60 px-4 py-3">
+                      <Switch
+                        id="isActive"
+                        checked={Boolean(field.value)}
+                        onCheckedChange={(value) => field.onChange(Boolean(value))}
+                        className="data-[state=checked]:bg-emerald-600"
+                      />
+                      <span className="text-sm text-gray-200">
+                        {field.value ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                  )}
+                />
               </Field>
             </div>
-            <Field label="Bio" htmlFor="bio" error={errors.bio?.message} optional>
-              <Textarea id="bio" rows={3} {...register("bio")} />
+
+            {sectionOptions.length ? (
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-wide text-gray-500">Common sections</p>
+                <div className="flex flex-wrap gap-2">
+                  {sectionOptions.slice(0, 12).map((option) => (
+                    <Button
+                      key={option}
+                      type="button"
+                      variant="outline"
+                      className="border-gray-700 text-gray-200 hover:text-white"
+                      onClick={() => setValue("section", option, { shouldDirty: true })}
+                    >
+                      {option}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <Field label="Advisor notes" htmlFor="bio" error={errors.bio?.message} optional>
+              <Textarea id="bio" rows={4} {...register("bio")} />
             </Field>
+
             <div className="flex items-center justify-end gap-3">
               <Button type="button" variant="ghost" onClick={() => reset()} disabled={isSubmitting}>
                 Reset
               </Button>
-              <Button type="submit" disabled={isSubmitting} className="bg-blue-600 hover:bg-blue-700">
+              <Button type="submit" disabled={isSubmitting} className="bg-purple-600 hover:bg-purple-700">
                 {isSubmitting ? "Saving..." : "Save changes"}
               </Button>
             </div>
@@ -257,7 +353,7 @@ interface FieldProps {
   htmlFor: string;
   error?: string;
   optional?: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 function Field({ label, htmlFor, error, optional, children }: FieldProps) {
@@ -272,5 +368,5 @@ function Field({ label, htmlFor, error, optional, children }: FieldProps) {
       </div>
       {children}
     </div>
-  );
-}
+    );
+  }

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 
 import { adminCourseUpdateSchema, type AdminCourseUpdateInput } from "@/lib/validation/course";
 import { cn } from "@/lib/utils";
@@ -52,6 +53,7 @@ export default function AdminCourseDetailPage() {
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const form = useForm<AdminCourseUpdateInput>({
     resolver: zodResolver(adminCourseUpdateSchema),
@@ -60,6 +62,7 @@ export default function AdminCourseDetailPage() {
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
@@ -73,6 +76,7 @@ export default function AdminCourseDetailPage() {
       }
       setIsLoading(true);
       setError(null);
+      setSuccessMessage(null);
       try {
         const response = await fetch(`/api/admin/courses/${params.courseId}`);
         const result = await response.json().catch(() => ({}));
@@ -108,6 +112,7 @@ export default function AdminCourseDetailPage() {
     if (!params?.courseId) {
       return;
     }
+    setSuccessMessage(null);
     try {
       const response = await fetch(`/api/admin/courses/${params.courseId}`, {
         method: "PATCH",
@@ -123,6 +128,7 @@ export default function AdminCourseDetailPage() {
         description: `${result.course.title} updated successfully`,
       });
       setCourse(result.course);
+      setSuccessMessage(`${result.course.title} updated successfully.`);
     } catch (error: any) {
       toast({
         title: "Update failed",
@@ -188,6 +194,12 @@ export default function AdminCourseDetailPage() {
           <CardTitle className="text-white">Course details</CardTitle>
         </CardHeader>
         <CardContent>
+          {successMessage ? (
+            <Alert className="mb-4 border-emerald-500/40 bg-emerald-500/10 text-emerald-100">
+              <AlertTitle>Changes saved</AlertTitle>
+              <AlertDescription>{successMessage}</AlertDescription>
+            </Alert>
+          ) : null}
           <form onSubmit={onSubmit} className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Title" htmlFor="title" error={errors.title?.message}>
@@ -209,21 +221,38 @@ export default function AdminCourseDetailPage() {
                 <Input id="prerequisite" {...register("prerequisite")} />
               </Field>
               <Field label="Status" htmlFor="isActive" error={errors.isActive?.message}>
-                <select
-                  id="isActive"
-                  className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-200 focus:outline-none"
-                  {...register("isActive")}
-                >
-                  <option value="true">Active</option>
-                  <option value="false">Inactive</option>
-                </select>
+                <Controller
+                  control={control}
+                  name="isActive"
+                  render={({ field }) => (
+                    <div className="flex items-center gap-3 rounded-xl border border-gray-700 bg-gray-800/60 px-4 py-3">
+                      <Switch
+                        id="isActive"
+                        checked={Boolean(field.value)}
+                        onCheckedChange={(value) => field.onChange(value)}
+                        className="data-[state=checked]:bg-emerald-600"
+                      />
+                      <span className="text-sm text-gray-200">
+                        {field.value ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                  )}
+                />
               </Field>
             </div>
             <Field label="Description" htmlFor="description" error={errors.description?.message} optional>
               <Textarea id="description" rows={4} {...register("description")} />
             </Field>
             <div className="flex items-center justify-end gap-3">
-              <Button type="button" variant="ghost" onClick={() => reset()} disabled={isSubmitting}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  reset();
+                  setSuccessMessage(null);
+                }}
+                disabled={isSubmitting}
+              >
                 Reset
               </Button>
               <Button type="submit" disabled={isSubmitting} className="bg-orange-600 hover:bg-orange-700">

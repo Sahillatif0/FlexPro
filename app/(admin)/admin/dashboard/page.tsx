@@ -106,17 +106,20 @@ return () => {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {isLoading || !data ? (
           Array.from({ length: 5 }).map((_, index) => (
-            <Card key={index} className="bg-gray-900 border-gray-800">
+            <Card
+              key={index}
+              className="rounded-3xl border border-white/10 bg-slate-950/70 backdrop-blur-xl shadow-lg shadow-purple-900/10"
+            >
               <CardContent className="p-6 space-y-4">
-                <Skeleton className="h-4 w-24 bg-gray-800" />
-                <Skeleton className="h-8 w-16 bg-gray-800" />
-                <Skeleton className="h-3 w-20 bg-gray-800" />
+                <Skeleton className="h-4 w-24 rounded-full bg-white/10" />
+                <Skeleton className="h-8 w-16 rounded-2xl bg-white/10" />
+                <Skeleton className="h-3 w-20 rounded-full bg-white/10" />
               </CardContent>
             </Card>
           ))
         ) : (
           <>
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="rounded-3xl border border-white/10 bg-slate-950/70 backdrop-blur-xl shadow-lg shadow-purple-900/10">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -127,7 +130,7 @@ return () => {
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="rounded-3xl border border-white/10 bg-slate-950/70 backdrop-blur-xl shadow-lg shadow-purple-900/10">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -138,7 +141,7 @@ return () => {
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="rounded-3xl border border-white/10 bg-slate-950/70 backdrop-blur-xl shadow-lg shadow-purple-900/10">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -149,7 +152,7 @@ return () => {
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="rounded-3xl border border-white/10 bg-slate-950/70 backdrop-blur-xl shadow-lg shadow-purple-900/10">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -176,7 +179,7 @@ return () => {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[2fr,3fr]">
-        <Card className="bg-gray-900 border-gray-800">
+            <Card className="rounded-3xl border border-white/10 bg-slate-950/70 backdrop-blur-xl shadow-lg shadow-purple-900/10">
           <CardHeader>
             <CardTitle className="text-white">Recently Added Courses</CardTitle>
           </CardHeader>
@@ -184,13 +187,13 @@ return () => {
             {isLoading || !data ? (
               <div className="space-y-3">
                 {Array.from({ length: 4 }).map((_, index) => (
-                  <Skeleton key={index} className="h-14 bg-gray-800" />
+                  <Skeleton key={index} className="h-14 rounded-2xl bg-white/10" />
                 ))}
               </div>
             ) : data.recentCourses.length ? (
               <div className="space-y-3">
                 {data.recentCourses.map((course) => (
-                  <div key={course.id} className="rounded-lg bg-gray-800/60 p-4">
+                  <div key={course.id} className="rounded-2xl border border-white/5 bg-white/5 p-4 text-slate-200 shadow-inner shadow-purple-900/5">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-semibold text-white">
                         {course.code} · {course.title}
@@ -211,7 +214,7 @@ return () => {
           </CardContent>
         </Card>
 
-        <Card className="bg-gray-900 border-gray-800">
+        <Card className="rounded-3xl border border-white/10 bg-slate-950/70 backdrop-blur-xl shadow-lg shadow-purple-900/10">
           <CardHeader>
             <CardTitle className="text-white">Recent Platform Activity</CardTitle>
           </CardHeader>
@@ -219,16 +222,16 @@ return () => {
             {isLoading || !data ? (
               <div className="space-y-3">
                 {Array.from({ length: 6 }).map((_, index) => (
-                  <Skeleton key={index} className="h-12 bg-gray-800" />
+                  <Skeleton key={index} className="h-12 rounded-2xl bg-white/10" />
                 ))}
               </div>
             ) : data.recentActivity.length ? (
               <div className="space-y-4">
                 {data.recentActivity.map((activity) => (
-                  <div key={activity.id} className="space-y-1">
+                  <div key={activity.id} className="space-y-2 rounded-2xl border border-white/5 bg-white/5 p-4 shadow-inner shadow-purple-900/5">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium text-white">{activity.title}</p>
-                      <Badge variant="outline" className="border-purple-500 text-purple-300">
+                      <Badge variant="outline" className="border-purple-400 text-purple-200">
                         {activity.type}
                       </Badge>
                     </div>
@@ -246,7 +249,7 @@ return () => {
         </Card>
       </div>
 
-      <Alert className="border-purple-500/40 bg-purple-500/10 text-purple-200">
+      <Alert className="rounded-3xl border border-white/10 bg-gradient-to-r from-purple-500/20 via-transparent to-transparent text-purple-100 backdrop-blur">
         <ShieldCheck className="h-4 w-4" />
         <AlertTitle>Tip</AlertTitle>
         <AlertDescription>
