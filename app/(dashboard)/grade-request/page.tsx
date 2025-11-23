@@ -248,15 +248,15 @@ export default function GradeRequestPage() {
                 value === 'approved'
                   ? 'default'
                   : value === 'pending'
-                  ? 'secondary'
-                  : 'destructive'
+                    ? 'secondary'
+                    : 'destructive'
               }
               className={
                 value === 'approved'
                   ? 'bg-emerald-600'
                   : value === 'pending'
-                  ? 'bg-amber-600'
-                  : ''
+                    ? 'bg-amber-600'
+                    : ''
               }
             >
               {value}
@@ -309,15 +309,15 @@ export default function GradeRequestPage() {
                           item.status === 'approved'
                             ? 'default'
                             : item.status === 'pending'
-                            ? 'secondary'
-                            : 'destructive'
+                              ? 'secondary'
+                              : 'destructive'
                         }
                         className={
                           item.status === 'approved'
                             ? 'bg-emerald-600'
                             : item.status === 'pending'
-                            ? 'bg-amber-600'
-                            : ''
+                              ? 'bg-amber-600'
+                              : ''
                         }
                       >
                         {item.status}

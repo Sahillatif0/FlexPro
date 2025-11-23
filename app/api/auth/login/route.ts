@@ -21,7 +21,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { identifier, password } = parsed.data;
+    const { identifier, password, rememberMe } = parsed.data;
     const normalizedIdentifier = identifier.trim();
 
     const user = await prisma.user.findFirst({
@@ -56,7 +56,9 @@ export async function POST(request: Request) {
     }
 
     const sanitizedUser = toPublicUser(user);
-    const token = signAuthToken(sanitizedUser.id);
+    // 7 days if rememberMe is true, otherwise 1 day
+    const tokenMaxAge = rememberMe ? 60 * 60 * 24 * 7 : 60 * 60 * 24;
+    const token = signAuthToken(sanitizedUser.id, tokenMaxAge);
 
     const response = NextResponse.json(
       {
@@ -73,7 +75,7 @@ export async function POST(request: Request) {
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
       path: '/',
-      maxAge: AUTH_TOKEN_MAX_AGE,
+      maxAge: rememberMe ? 60 * 60 * 24 * 7 : 60 * 60 * 24,
     });
 
     return response;
