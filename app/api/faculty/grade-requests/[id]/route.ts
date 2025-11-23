@@ -106,6 +106,61 @@ export async function PATCH(
       },
     });
 
+    // If approved, also apply the requested grade to the student's transcript
+    if (nextStatus === 'approved') {
+      try {
+        const courseRecord = await prisma.course.findFirst({ where: { code: gradeRequest.courseCode } });
+        if (courseRecord) {
+          const gradeToPoints = (grade: string) => {
+            const normalized = (grade || '').trim().toUpperCase();
+            const map: Record<string, number> = {
+              'A+': 4.0,
+              'A': 4.0,
+              'A-': 3.67,
+              'B+': 3.33,
+              'B': 3.0,
+              'B-': 2.67,
+              'C+': 2.33,
+              'C': 2.0,
+              'C-': 1.67,
+              'D': 1.0,
+              'F': 0.0,
+            };
+
+            return typeof map[normalized] === 'number' ? map[normalized] : 0.0;
+          };
+
+          const points = gradeToPoints(updated.requestedGrade || 'F');
+
+          // Upsert final transcript entry (create if none, otherwise update)
+          await prisma.transcript.upsert({
+            where: {
+              userId_courseId_termId_status: {
+                userId: updated.userId,
+                courseId: courseRecord.id,
+                termId: updated.termId,
+                status: 'final',
+              },
+            },
+            update: {
+              grade: updated.requestedGrade,
+              gradePoints: points,
+            },
+            create: {
+              userId: updated.userId,
+              courseId: courseRecord.id,
+              termId: updated.termId,
+              grade: updated.requestedGrade,
+              gradePoints: points,
+              status: 'final',
+            },
+          });
+        }
+      } catch (e) {
+        console.error('Failed to apply approved grade to transcript', e);
+      }
+    }
+
     return NextResponse.json({
       message: "Grade request updated",
       gradeRequest: {
