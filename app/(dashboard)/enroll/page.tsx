@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAppStore } from '@/store';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Trash2 } from 'lucide-react';
+import { StudentMetricSkeleton } from '@/components/ui/student-skeleton';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,6 +61,7 @@ export default function EnrollPage() {
   const [summary, setSummary] = useState<EnrollmentSummary | null>(null);
   const [term, setTerm] = useState<ActiveTermInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [enrollingCourse, setEnrollingCourse] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showLimitDialog, setShowLimitDialog] = useState(false);
@@ -69,6 +71,7 @@ export default function EnrollPage() {
     async (signal?: AbortSignal) => {
       if (!user) return;
       setIsLoading(true);
+      setHasLoaded(false);
       setError(null);
 
       try {
@@ -93,6 +96,7 @@ export default function EnrollPage() {
         setDepartments(['all', ...payload.departments]);
         setSummary(payload.summary);
         setTerm(payload.term);
+        setHasLoaded(true);
       } catch (err: any) {
         if (err.name === 'AbortError') return;
         console.error('Enrollment fetch error', err);
@@ -101,6 +105,7 @@ export default function EnrollPage() {
           title: 'Unable to load courses',
           description: err.message || 'Please refresh and try again.',
         });
+        setHasLoaded(true);
       } finally {
         setIsLoading(false);
       }
@@ -344,6 +349,8 @@ export default function EnrollPage() {
     })
     : null;
 
+  const showMetricSkeletons = isLoading || !hasLoaded;
+
   return (
     <div className="space-y-6">
       <div>
@@ -357,17 +364,17 @@ export default function EnrollPage() {
         </p>
       ) : null}
 
-      <Card className="bg-gray-800 border-gray-700">
+      <Card className="student-surface border-0 bg-transparent">
         <CardHeader>
           <CardTitle className="text-white">Filter Courses</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex gap-4">
             <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-              <SelectTrigger className="w-48 bg-gray-700 border-gray-600 text-white">
+              <SelectTrigger className="w-48 student-input" disabled={isLoading}>
                 <SelectValue placeholder="Select department" />
               </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-700">
+              <SelectContent className="student-popover">
                 {departments.map((dept) => (
                   <SelectItem key={dept} value={dept} className="text-white">
                     {dept === 'all' ? 'All Departments' : dept}
@@ -380,66 +387,67 @@ export default function EnrollPage() {
       </Card>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-gray-800 border-gray-700">
-          <CardContent className="p-6">
-            <div className="text-center">
-              <p className="text-gray-400 text-sm">Available Courses</p>
-              <p className="text-2xl font-bold text-white">
-                {summary?.availableCount ?? 0}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-gray-800 border-gray-700">
-          <CardContent className="p-6">
-            <div className="text-center">
-              <p className="text-gray-400 text-sm">Credit Limit</p>
-              <p className="text-2xl font-bold text-white">
-                {summary?.creditLimit ?? 0}
-              </p>
-              <p className="text-xs text-gray-500">
-                Currently enrolled: {summary?.currentCredits ?? 0} credit hours
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-gray-800 border-gray-700">
-          <CardContent className="p-6">
-            <div className="text-center">
-              <p className="text-gray-400 text-sm">Registration Period</p>
-              <p className="text-2xl font-bold text-emerald-400">
-                {registrationDeadline ? 'Open' : 'Pending'}
-              </p>
-              <p className="text-xs text-gray-500">
-                {registrationDeadline
-                  ? `Ends ${registrationDeadline}`
-                  : 'Registration window not announced'}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        {showMetricSkeletons ? (
+          Array.from({ length: 3 }).map((_, index) => <StudentMetricSkeleton key={index} />)
+        ) : (
+          <>
+            <Card className="student-surface border-0 bg-transparent p-6">
+              <div className="space-y-3 text-center">
+                <p className="text-sm text-slate-400/75">Available Courses</p>
+                <p className="text-2xl font-semibold text-white">
+                  {summary?.availableCount ?? 0}
+                </p>
+              </div>
+            </Card>
+            <Card className="student-surface border-0 bg-transparent p-6">
+              <div className="space-y-3 text-center">
+                <p className="text-sm text-slate-400/75">Credit Limit</p>
+                <p className="text-2xl font-semibold text-white">
+                  {summary?.creditLimit ?? 0}
+                </p>
+                <p className="text-xs text-slate-400/80">
+                  Currently enrolled: {summary?.currentCredits ?? 0} credit hours
+                </p>
+              </div>
+            </Card>
+            <Card className="student-surface border-0 bg-transparent p-6">
+              <div className="space-y-3 text-center">
+                <p className="text-sm text-slate-400/75">Registration Period</p>
+                <p className="text-2xl font-semibold text-emerald-400">
+                  {registrationDeadline ? 'Open' : 'Pending'}
+                </p>
+                <p className="text-xs text-slate-400/80">
+                  {registrationDeadline
+                    ? `Ends ${registrationDeadline}`
+                    : 'Registration window not announced'}
+                </p>
+              </div>
+            </Card>
+          </>
+        )}
       </div>
 
-      <Card className="bg-gray-800 border-gray-700">
+      <Card className="student-surface border-0 bg-transparent">
         <CardHeader>
           <CardTitle className="text-white">Available Courses</CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <p className="text-sm text-gray-400">Loading available courses...</p>
-          ) : (
-            <DataTable
-              data={filteredCourses}
-              columns={columns}
-              searchKey="title"
-              emptyMessage="No courses available for enrollment"
-            />
-          )}
+          <DataTable
+            data={filteredCourses}
+            columns={columns}
+            searchKey="title"
+            emptyMessage="No courses available for enrollment"
+            isLoading={isLoading || !hasLoaded}
+            skeletonRows={8}
+            hideSearchWhileLoading
+            skeletonColumns={columns.length}
+            showEmptyState={hasLoaded}
+          />
         </CardContent>
       </Card>
 
       <AlertDialog open={showLimitDialog} onOpenChange={setShowLimitDialog}>
-        <AlertDialogContent className="bg-gray-800 border-gray-700 text-white">
+        <AlertDialogContent className="student-popover text-white">
           <AlertDialogHeader>
             <AlertDialogTitle>Registration Limit Reached</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-400">

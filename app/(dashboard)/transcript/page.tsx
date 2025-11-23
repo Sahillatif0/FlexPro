@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Award, TrendingUp, BookOpen, Calendar } from 'lucide-react';
 import { useAppStore } from '@/store';
 import { useToast } from '@/hooks/use-toast';
+import { StudentCardSkeleton, StudentMetricSkeleton } from '@/components/ui/student-skeleton';
 
 interface TranscriptRecord {
   id: string;
@@ -44,6 +45,7 @@ export default function TranscriptPage() {
   const [termStats, setTermStats] = useState<TermStat[]>([]);
   const [selectedTerm, setSelectedTerm] = useState('all');
   const [isLoading, setIsLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -54,6 +56,7 @@ export default function TranscriptPage() {
     async function loadTranscript() {
       if(!user) return;
       setIsLoading(true);
+      setHasLoaded(false);
       setError(null);
 
       try {
@@ -74,10 +77,13 @@ export default function TranscriptPage() {
           termStats: TermStat[];
         };
 
+        if (controller.signal.aborted) return;
+
         setRecords(payload.records);
         setSummary(payload.summary);
         setTerms(payload.terms);
         setTermStats(payload.termStats);
+        setHasLoaded(true);
       } catch (err: any) {
         if (err.name === 'AbortError') return;
         console.error('Transcript fetch error', err);
@@ -86,7 +92,9 @@ export default function TranscriptPage() {
           title: 'Unable to load transcript',
           description: err.message || 'Please try again later.',
         });
+        setHasLoaded(true);
       } finally {
+        if (controller.signal.aborted) return;
         setIsLoading(false);
       }
     }
@@ -100,7 +108,7 @@ export default function TranscriptPage() {
     return records.filter((record) => record.term === selectedTerm);
   }, [records, selectedTerm]);
 
-  const columns = useMemo(
+  const tableColumns = useMemo(
     () => [
       {
         key: 'courseCode',
@@ -158,6 +166,8 @@ export default function TranscriptPage() {
     []
   );
 
+  const tableColumnCount = tableColumns.length;
+
   if (!user) {
     return <p className="text-gray-300">Sign in to view transcript information.</p>;
   }
@@ -166,6 +176,7 @@ export default function TranscriptPage() {
   const totalCreditHours = summary?.totalCreditHours ?? 0;
   const coursesCompleted = summary?.coursesCompleted ?? 0;
   const termCount = summary?.termCount ?? 0;
+  const showSkeletons = isLoading && !hasLoaded;
 
   return (
     <div className="space-y-6">
@@ -195,52 +206,60 @@ export default function TranscriptPage() {
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="bg-gray-800 border-gray-700">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm">CGPA</p>
-                <p className="text-2xl font-bold text-white">
-                  {cgpa !== null ? cgpa.toFixed(2) : 'N/A'}
-                </p>
-              </div>
-              <Award className="h-8 w-8 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-gray-800 border-gray-700">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm">Credit Hours</p>
-                <p className="text-2xl font-bold text-white">{totalCreditHours}</p>
-              </div>
-              <BookOpen className="h-8 w-8 text-emerald-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-gray-800 border-gray-700">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm">Courses Completed</p>
-                <p className="text-2xl font-bold text-white">{coursesCompleted}</p>
-              </div>
-              <TrendingUp className="h-8 w-8 text-amber-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-gray-800 border-gray-700">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm">Academic Terms</p>
-                <p className="text-2xl font-bold text-white">{termCount}</p>
-              </div>
-              <Calendar className="h-8 w-8 text-purple-500" />
-            </div>
-          </CardContent>
-        </Card>
+        {showSkeletons
+          ? Array.from({ length: 4 }).map((_, index) => (
+              <StudentMetricSkeleton key={index} />
+            ))
+          : (
+              <>
+                <Card className="bg-gray-800 border-gray-700">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-gray-400 text-sm">CGPA</p>
+                        <p className="text-2xl font-bold text-white">
+                          {cgpa !== null ? cgpa.toFixed(2) : 'N/A'}
+                        </p>
+                      </div>
+                      <Award className="h-8 w-8 text-blue-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gray-800 border-gray-700">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-gray-400 text-sm">Credit Hours</p>
+                        <p className="text-2xl font-bold text-white">{totalCreditHours}</p>
+                      </div>
+                      <BookOpen className="h-8 w-8 text-emerald-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gray-800 border-gray-700">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-gray-400 text-sm">Courses Completed</p>
+                        <p className="text-2xl font-bold text-white">{coursesCompleted}</p>
+                      </div>
+                      <TrendingUp className="h-8 w-8 text-amber-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gray-800 border-gray-700">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-gray-400 text-sm">Academic Terms</p>
+                        <p className="text-2xl font-bold text-white">{termCount}</p>
+                      </div>
+                      <Calendar className="h-8 w-8 text-purple-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
       </div>
 
       <Card className="bg-gray-800 border-gray-700">
@@ -248,27 +267,35 @@ export default function TranscriptPage() {
           <CardTitle className="text-white">Term-wise Performance</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
-            {termStats.length ? (
-              termStats.map((stat, index) => (
-                <div key={`${stat.term ?? 'unknown'}-${index}`} className="bg-gray-700 rounded-lg p-4">
-                  <h3 className="font-medium text-white mb-2">{stat.term ?? 'Unknown Term'}</h3>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Credits:</span>
-                      <span className="text-white">{stat.credits}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">GPA:</span>
-                      <span className="text-emerald-400 font-bold">{stat.gpa.toFixed(2)}</span>
+          {showSkeletons ? (
+            <div className="grid gap-4 md:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <StudentCardSkeleton key={index} lines={3} withHeader={false} />
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-3">
+              {termStats.length ? (
+                termStats.map((stat, index) => (
+                  <div key={`${stat.term ?? 'unknown'}-${index}`} className="bg-gray-700 rounded-lg p-4">
+                    <h3 className="font-medium text-white mb-2">{stat.term ?? 'Unknown Term'}</h3>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Credits:</span>
+                        <span className="text-white">{stat.credits}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">GPA:</span>
+                        <span className="text-emerald-400 font-bold">{stat.gpa.toFixed(2)}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-gray-400">No term statistics available.</p>
-            )}
-          </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-400">No term statistics available.</p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -281,7 +308,7 @@ export default function TranscriptPage() {
             <SelectTrigger className="w-48 bg-gray-700 border-gray-600 text-white">
               <SelectValue placeholder="Select term" />
             </SelectTrigger>
-            <SelectContent className="bg-gray-800 border-gray-700">
+            <SelectContent className="student-popover">
               <SelectItem value="all" className="text-white">
                 All Terms
               </SelectItem>
@@ -300,16 +327,16 @@ export default function TranscriptPage() {
           <CardTitle className="text-white">Grade Records</CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <p className="text-sm text-gray-400">Loading grade records...</p>
-          ) : (
-            <DataTable
-              data={filteredRecords}
-              columns={columns}
-              searchKey="courseTitle"
-              emptyMessage="No grade records found"
-            />
-          )}
+          <DataTable
+            data={filteredRecords}
+            columns={tableColumns}
+            searchKey="courseTitle"
+            emptyMessage="No grade records found"
+            isLoading={isLoading}
+            hideSearchWhileLoading
+            skeletonColumns={tableColumnCount}
+            showEmptyState={hasLoaded}
+          />
         </CardContent>
       </Card>
     </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, FileText, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { useAppStore } from '@/store';
 import { useToast } from '@/hooks/use-toast';
-import { Skeleton } from '@/components/ui/skeleton';
+import { StudentMetricSkeleton } from '@/components/ui/student-skeleton';
 
 interface GradeRequestItem {
   id: string;
@@ -63,22 +63,24 @@ export default function GradeRequestPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
-  useEffect(() => {
-    if (!user) return;
+  const loadRequests = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!user) return;
 
-    const controller = new AbortController();
-
-    async function loadRequests() {
-      if(!user) return;
       setIsLoading(true);
+      setHasLoaded(false);
       setError(null);
 
       try {
         const params = new URLSearchParams({ userId: user.id });
-        const response = await fetch(`/api/grade-requests?${params.toString()}`, {
-          signal: controller.signal,
-        });
+        const fetchOptions: RequestInit = {};
+        if (signal) {
+          fetchOptions.signal = signal;
+        }
+
+        const response = await fetch(`/api/grade-requests?${params.toString()}`, fetchOptions);
 
         if (!response.ok) {
           const result = await response.json().catch(() => ({}));
@@ -92,10 +94,13 @@ export default function GradeRequestPage() {
           summary: GradeRequestSummary;
         };
 
+        if (signal?.aborted) return;
+
         setGradeRequests(payload.gradeRequests);
         setCourseOptions(payload.courseOptions);
         setTermOptions(payload.termOptions);
         setSummary(payload.summary);
+        setHasLoaded(true);
       } catch (err: any) {
         if (err.name === 'AbortError') return;
         console.error('Grade request fetch error', err);
@@ -104,14 +109,22 @@ export default function GradeRequestPage() {
           title: 'Unable to load grade requests',
           description: err.message || 'Please try again later.',
         });
+        setHasLoaded(true);
       } finally {
+        if (signal?.aborted) return;
         setIsLoading(false);
       }
-    }
+    },
+    [toast, user]
+  );
 
-    loadRequests();
+  useEffect(() => {
+    if (!user) return;
+
+    const controller = new AbortController();
+    loadRequests(controller.signal);
     return () => controller.abort();
-  }, [toast, user]);
+  }, [loadRequests, user]);
 
   const resetForm = () => {
     setSelectedCourseKey('');
@@ -167,19 +180,7 @@ export default function GradeRequestPage() {
 
       // Re-fetch to get latest data
       const params = new URLSearchParams({ userId: user.id });
-      const refreshed = await fetch(`/api/grade-requests?${params.toString()}`);
-      if (refreshed.ok) {
-        const payload = (await refreshed.json()) as {
-          gradeRequests: GradeRequestItem[];
-          courseOptions: CourseOption[];
-          termOptions: TermOption[];
-          summary: GradeRequestSummary;
-        };
-        setGradeRequests(payload.gradeRequests);
-        setCourseOptions(payload.courseOptions);
-        setTermOptions(payload.termOptions);
-        setSummary(payload.summary);
-      }
+      await loadRequests();
     } catch (err: any) {
       console.error('Grade request submission error', err);
       toast({
@@ -287,7 +288,7 @@ export default function GradeRequestPage() {
                 View
               </Button>
             </DialogTrigger>
-            <DialogContent className="bg-gray-800 border-gray-700 max-w-2xl">
+            <DialogContent className="student-popover max-w-2xl">
               <DialogHeader>
                 <DialogTitle className="text-white">Grade Request Details</DialogTitle>
               </DialogHeader>
@@ -375,6 +376,7 @@ export default function GradeRequestPage() {
   const pendingRequests = summary?.pending ?? 0;
   const approvedRequests = summary?.approved ?? 0;
   const rejectedRequests = summary?.rejected ?? 0;
+  const showSkeletons = isLoading && !hasLoaded;
 
   return (
     <div className="space-y-6">
@@ -390,7 +392,7 @@ export default function GradeRequestPage() {
               New Request
             </Button>
           </DialogTrigger>
-          <DialogContent className="bg-gray-800 border-gray-700">
+          <DialogContent className="student-popover">
             <DialogHeader>
               <DialogTitle className="text-white">Submit Grade Request</DialogTitle>
             </DialogHeader>
@@ -410,7 +412,7 @@ export default function GradeRequestPage() {
                   <SelectTrigger className="mt-1 bg-gray-700 border-gray-600 text-white">
                     <SelectValue placeholder="Select course" />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-700 max-h-60">
+                  <SelectContent className="student-popover max-h-60">
                     {courseOptions.map((course) => (
                       <SelectItem
                         key={`${course.courseCode}|${course.termId}`}
@@ -429,7 +431,7 @@ export default function GradeRequestPage() {
                   <SelectTrigger className="mt-1 bg-gray-700 border-gray-600 text-white">
                     <SelectValue placeholder="Select term" />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-700">
+                  <SelectContent className="student-popover">
                     {termOptions.map((term) => (
                       <SelectItem key={term.id} value={term.id} className="text-white">
                         {term.name}
@@ -445,7 +447,7 @@ export default function GradeRequestPage() {
                     <SelectTrigger className="mt-1 bg-gray-700 border-gray-600 text-white">
                       <SelectValue placeholder="Select grade" />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-700">
+                    <SelectContent className="student-popover">
                       {['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'F'].map((grade) => (
                         <SelectItem key={grade} value={grade} className="text-white">
                           {grade}
@@ -460,7 +462,7 @@ export default function GradeRequestPage() {
                     <SelectTrigger className="mt-1 bg-gray-700 border-gray-600 text-white">
                       <SelectValue placeholder="Select grade" />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-700">
+                    <SelectContent className="student-popover">
                       {['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D'].map((grade) => (
                         <SelectItem key={grade} value={grade} className="text-white">
                           {grade}
@@ -507,65 +509,58 @@ export default function GradeRequestPage() {
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
-        {isLoading && !summary ? (
-          Array.from({ length: 4 }).map((_, index) => (
-            <Card key={index} className="bg-gray-800 border-gray-700">
-              <CardContent className="p-6">
-                <div className="space-y-3">
-                  <Skeleton className="h-4 w-28 bg-gray-700" />
-                  <Skeleton className="h-6 w-24 bg-gray-700" />
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        ) : (
-          <>
-            <Card className="bg-gray-800 border-gray-700">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-400 text-sm">Total Requests</p>
-                    <p className="text-2xl font-bold text-white">{totalRequests}</p>
-                  </div>
-                  <FileText className="h-8 w-8 text-blue-500" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gray-800 border-gray-700">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-400 text-sm">Pending</p>
-                    <p className="text-2xl font-bold text-amber-400">{pendingRequests}</p>
-                  </div>
-                  <Clock className="h-8 w-8 text-amber-500" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gray-800 border-gray-700">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-400 text-sm">Approved</p>
-                    <p className="text-2xl font-bold text-emerald-400">{approvedRequests}</p>
-                  </div>
-                  <CheckCircle className="h-8 w-8 text-emerald-500" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gray-800 border-gray-700">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-400 text-sm">Rejected</p>
-                    <p className="text-2xl font-bold text-red-400">{rejectedRequests}</p>
-                  </div>
-                  <XCircle className="h-8 w-8 text-red-500" />
-                </div>
-              </CardContent>
-            </Card>
-          </>
-        )}
+        {showSkeletons
+          ? Array.from({ length: 4 }).map((_, index) => (
+              <StudentMetricSkeleton key={index} />
+            ))
+          : (
+              <>
+                <Card className="bg-gray-800 border-gray-700">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-gray-400 text-sm">Total Requests</p>
+                        <p className="text-2xl font-bold text-white">{totalRequests}</p>
+                      </div>
+                      <FileText className="h-8 w-8 text-blue-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gray-800 border-gray-700">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-gray-400 text-sm">Pending</p>
+                        <p className="text-2xl font-bold text-amber-400">{pendingRequests}</p>
+                      </div>
+                      <Clock className="h-8 w-8 text-amber-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gray-800 border-gray-700">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-gray-400 text-sm">Approved</p>
+                        <p className="text-2xl font-bold text-emerald-400">{approvedRequests}</p>
+                      </div>
+                      <CheckCircle className="h-8 w-8 text-emerald-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gray-800 border-gray-700">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-gray-400 text-sm">Rejected</p>
+                        <p className="text-2xl font-bold text-red-400">{rejectedRequests}</p>
+                      </div>
+                      <XCircle className="h-8 w-8 text-red-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
       </div>
 
       {/* Requests Table */}
@@ -574,25 +569,16 @@ export default function GradeRequestPage() {
           <CardTitle className="text-white">Grade Change Requests</CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 6 }).map((_, index) => (
-                <div key={index} className="grid grid-cols-4 items-center gap-4">
-                  <Skeleton className="h-4 w-full bg-gray-700" />
-                  <Skeleton className="h-4 w-full bg-gray-700" />
-                  <Skeleton className="h-4 w-24 bg-gray-700" />
-                  <Skeleton className="h-8 w-20 bg-gray-700" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <DataTable
-              data={gradeRequests}
-              columns={columns}
-              searchKey="courseCode"
-              emptyMessage="No grade requests submitted"
-            />
-          )}
+          <DataTable
+            data={gradeRequests}
+            columns={columns}
+            searchKey="courseCode"
+            emptyMessage="No grade requests submitted"
+            isLoading={isLoading}
+            hideSearchWhileLoading
+            skeletonColumns={columns.length}
+            showEmptyState={hasLoaded}
+          />
         </CardContent>
       </Card>
     </div>

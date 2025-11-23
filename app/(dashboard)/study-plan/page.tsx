@@ -345,7 +345,7 @@ export default function StudyPlanPage() {
               <SelectTrigger className="w-48 bg-gray-800 border-gray-700 text-white">
                 <SelectValue placeholder="Select semester" />
               </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-700">
+              <SelectContent className="student-popover">
                 {plan.semesters.map((semester) => (
                   <SelectItem key={semester.number} value={semester.number.toString()} className="text-white">
                     Semester {semester.number} - {semester.year}
@@ -383,7 +383,7 @@ export default function StudyPlanPage() {
                           Add Course
                         </Button>
                       </DialogTrigger>
-                      <DialogContent className="bg-gray-800 border-gray-700">
+                      <DialogContent className="student-popover">
                         <DialogHeader>
                           <DialogTitle className="text-white">Add Course to Semester</DialogTitle>
                         </DialogHeader>
@@ -392,7 +392,7 @@ export default function StudyPlanPage() {
                             <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                               <SelectValue placeholder="Select a course" />
                             </SelectTrigger>
-                            <SelectContent className="bg-gray-800 border-gray-700 max-h-60">
+                            <SelectContent className="student-popover max-h-60">
                               {availableCourses.map((course) => (
                                 <SelectItem key={course.id} value={course.id} className="text-white">
                                   {course.code} - {course.title} ({course.creditHours} CR)

@@ -7,8 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAppStore } from '@/store';
 import { useToast } from '@/hooks/use-toast';
-import { Calendar, TrendingUp, AlertTriangle, Award, Loader2 } from 'lucide-react';
+import { Calendar, TrendingUp, AlertTriangle, Award } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StudentCardSkeleton, StudentMetricSkeleton } from '@/components/ui/student-skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -54,24 +55,6 @@ export default function AttendancePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loaderStep, setLoaderStep] = useState(0);
-
-  const loadingMessages = useMemo(
-    () => [
-      'Getting your attendance ready…',
-      'Fetching your records…',
-      'Calculating your course stats…',
-      'Almost there…'
-    ],
-    []
-  );
-
-  useEffect(() => {
-    if ((isLoading || !hasLoaded) && loaderStep < loadingMessages.length - 1) {
-      const id = setTimeout(() => setLoaderStep((s) => Math.min(s + 1, loadingMessages.length - 1)), 1200);
-      return () => clearTimeout(id);
-    }
-  }, [isLoading, hasLoaded, loaderStep, loadingMessages.length]);
 
   useEffect(() => {
     if (!user) return;
@@ -82,8 +65,6 @@ export default function AttendancePage() {
     async function loadAttendance() {
       setIsLoading(true);
       setHasLoaded(false);
-      setLoaderStep(0);
-      setError(null);
 
       try {
         const params = new URLSearchParams({ userId });
@@ -95,7 +76,6 @@ export default function AttendancePage() {
           const result = await response.json().catch(() => ({}));
           throw new Error(result?.message || 'Failed to load attendance records');
         }
-
         const payload = (await response.json()) as {
           records: AttendanceRecord[];
           courseStats: CourseStat[];
@@ -136,6 +116,10 @@ export default function AttendancePage() {
     if (selectedCourse === 'all') return records;
     return records.filter((record) => record.courseCode === selectedCourse);
   }, [records, selectedCourse]);
+
+  const isInitialLoading = isLoading && !hasLoaded;
+  const showMetricSkeletons = isLoading || !hasLoaded;
+  const showCourseStatsSkeleton = (isLoading && !courseStats.length) || !hasLoaded;
 
   const columns = useMemo(
     () => [
@@ -237,26 +221,6 @@ export default function AttendancePage() {
         </ToggleGroup>
       </div>
 
-      {isLoading || !hasLoaded ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-gray-900/90 via-gray-900/70 to-gray-800/60">
-          <div className="rounded-xl border border-gray-700 bg-gray-800/80 px-6 py-5 shadow-xl">
-            <div className="flex flex-col items-center gap-3">
-              <div className="rounded-full p-3 bg-gray-700/60">
-                <Loader2 className="h-10 w-10 animate-spin text-blue-500 drop-shadow-md" />
-              </div>
-              <span className="text-sm text-gray-200">
-                {loadingMessages[Math.min(loaderStep, loadingMessages.length - 1)]}
-              </span>
-              <div className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="h-2 w-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="h-2 w-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       {error ? (
         <p className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
           {error}
@@ -264,141 +228,118 @@ export default function AttendancePage() {
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-4">
-        {isLoading && !summary ? (
-          Array.from({ length: 4 }).map((_, index) => (
-            <Card key={index} className="bg-gray-800 border-gray-700">
-              <CardContent className="p-6">
-                <div className="space-y-3">
-                  <Skeleton className="h-4 w-32 bg-gray-700" />
-                  <Skeleton className="h-6 w-24 bg-gray-700" />
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        ) : (
-          <>
-            <Card className="bg-gray-800 border-gray-700">
-              <CardContent className="p-6">
+        {showMetricSkeletons
+          ? Array.from({ length: 4 }).map((_, index) => <StudentMetricSkeleton key={index} />)
+          : (
+            <>
+              <Card className="student-surface border-0 bg-transparent p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-400 text-sm">Overall Attendance</p>
-                    <p className="text-2xl font-bold text-white">
+                    <p className="text-sm text-slate-400/75">Overall Attendance</p>
+                    <p className="text-2xl font-semibold text-white">
                       {overallAttendance !== null
                         ? `${overallAttendance.toFixed(1)}%`
                         : 'N/A'}
                     </p>
                   </div>
-                  <TrendingUp className="h-8 w-8 text-emerald-500" />
+                  <TrendingUp className="h-8 w-8 text-emerald-400" />
                 </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gray-800 border-gray-700">
-              <CardContent className="p-6">
+              </Card>
+              <Card className="student-surface border-0 bg-transparent p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-400 text-sm">Classes Attended</p>
-                    <p className="text-2xl font-bold text-white">
+                    <p className="text-sm text-slate-400/75">Classes Attended</p>
+                    <p className="text-2xl font-semibold text-white">
                       {totalPresent}/{totalClasses}
                     </p>
                   </div>
-                  <Calendar className="h-8 w-8 text-blue-500" />
+                  <Calendar className="h-8 w-8 text-sky-400" />
                 </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gray-800 border-gray-700">
-              <CardContent className="p-6">
+              </Card>
+              <Card className="student-surface border-0 bg-transparent p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-400 text-sm">Classes Missed</p>
-                    <p className="text-2xl font-bold text-red-400">{classesMissed}</p>
+                    <p className="text-sm text-slate-400/75">Classes Missed</p>
+                    <p className="text-2xl font-semibold text-rose-300">{classesMissed}</p>
                   </div>
-                  <AlertTriangle className="h-8 w-8 text-red-500" />
+                  <AlertTriangle className="h-8 w-8 text-rose-400" />
                 </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gray-800 border-gray-700">
-              <CardContent className="p-6">
+              </Card>
+              <Card className="student-surface border-0 bg-transparent p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-400 text-sm">Status</p>
-                    <p className="text-2xl font-bold text-emerald-400">{statusLabel}</p>
+                    <p className="text-sm text-slate-400/75">Status</p>
+                    <p className="text-2xl font-semibold text-emerald-300">{statusLabel}</p>
                   </div>
-                  <Award className="h-8 w-8 text-emerald-500" />
+                  <Award className="h-8 w-8 text-emerald-400" />
                 </div>
-              </CardContent>
-            </Card>
-          </>
-        )}
+              </Card>
+            </>
+          )}
       </div>
 
-      <Card className="bg-gray-800 border-gray-700">
-        <CardHeader>
-          <CardTitle className="text-white">Course-wise Attendance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {isLoading && !courseStats.length ? (
-              Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="bg-gray-700 rounded-lg p-4 space-y-3">
-                  <Skeleton className="h-4 w-24 bg-gray-600" />
-                  <Skeleton className="h-4 w-full bg-gray-600" />
-                  <Skeleton className="h-2 w-full rounded bg-gray-600" />
-                  <Skeleton className="h-4 w-16 bg-gray-600 mx-auto" />
-                </div>
-              ))
-            ) : (
-              courseStats.map((stat) => {
-                const percentage = stat.percentage ?? 0;
-                const colorClass =
-                  percentage >= 90
-                    ? 'text-emerald-400'
-                    : percentage >= 80
-                    ? 'text-amber-400'
-                    : 'text-red-400';
+      {showCourseStatsSkeleton ? (
+        <StudentCardSkeleton lines={4} />
+      ) : (
+        <Card className="student-surface border-0 bg-transparent">
+          <CardHeader>
+            <CardTitle className="text-white">Course-wise Attendance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {courseStats.length ? (
+                courseStats.map((stat) => {
+                  const percentage = stat.percentage ?? 0;
+                  const colorClass =
+                    percentage >= 90
+                      ? 'text-emerald-300'
+                      : percentage >= 80
+                      ? 'text-amber-300'
+                      : 'text-rose-300';
 
-                const barClass =
-                  percentage >= 90
-                    ? 'bg-emerald-500'
-                    : percentage >= 80
-                    ? 'bg-amber-500'
-                    : 'bg-red-500';
+                  const barClass =
+                    percentage >= 90
+                      ? 'bg-emerald-400'
+                      : percentage >= 80
+                      ? 'bg-amber-400'
+                      : 'bg-rose-400';
 
-                return (
-                  <div key={stat.courseCode} className="bg-gray-700 rounded-lg p-4">
-                    <h3 className="font-mono text-blue-400 mb-2">{stat.courseCode}</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-400">Attended:</span>
-                        <span className="text-white">
-                          {stat.present}/{stat.total}
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-600 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full ${barClass}`}
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                      <div className="text-center">
-                        <span className={`font-bold text-lg ${colorClass}`}>
-                          {stat.percentage !== null
-                            ? `${stat.percentage.toFixed(1)}%`
-                            : 'N/A'}
-                        </span>
+                  return (
+                    <div key={stat.courseCode} className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+                      <h3 className="font-mono text-sky-300 mb-2">{stat.courseCode}</h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between text-slate-300/75">
+                          <span>Attended</span>
+                          <span className="text-white">
+                            {stat.present}/{stat.total}
+                          </span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-white/10">
+                          <div
+                            className={`h-2 rounded-full ${barClass}`}
+                            style={{ width: `${Math.min(percentage, 100)}%` }}
+                          />
+                        </div>
+                        <div className="text-center">
+                          <span className={`text-lg font-semibold ${colorClass}`}>
+                            {stat.percentage !== null
+                              ? `${stat.percentage.toFixed(1)}%`
+                              : 'N/A'}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })
-            )}
-            {!courseStats.length ? (
-              <p className="text-sm text-gray-400 col-span-full">
-                No attendance statistics available yet.
-              </p>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
+                  );
+                })
+              ) : (
+                <p className="col-span-full text-sm text-slate-300/70">
+                  No attendance statistics available yet.
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {viewMode === 'all' ? (
         <Card className="bg-gray-800 border-gray-700">
@@ -413,7 +354,7 @@ export default function AttendancePage() {
                 <SelectTrigger className="w-48 bg-gray-700 border-gray-600 text-white">
                   <SelectValue placeholder="Select course" />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectContent className="student-popover">
                   <SelectItem value="all" className="text-white">
                     All Courses
                   </SelectItem>
@@ -439,102 +380,98 @@ export default function AttendancePage() {
         </CardHeader>
         <CardContent>
           {viewMode === 'all' ? (
-            isLoading ? (
-              <div className="space-y-3">
-                {Array.from({ length: 6 }).map((_, index) => (
-                  <div key={index} className="grid grid-cols-4 items-center gap-4">
-                    <Skeleton className="h-4 w-24 bg-gray-700" />
-                    <Skeleton className="h-4 w-32 bg-gray-700" />
-                    <Skeleton className="h-8 w-20 bg-gray-700" />
-                    <Skeleton className="h-4 w-28 bg-gray-700" />
-                  </div>
+            <DataTable
+              data={filteredRecords}
+              columns={columns}
+              searchKey="courseCode"
+              emptyMessage="No attendance records found"
+              isLoading={isLoading || !hasLoaded}
+              skeletonRows={8}
+              hideSearchWhileLoading
+              skeletonColumns={columns.length}
+              showEmptyState={hasLoaded}
+            />
+          ) : courses.length ? (
+            <Tabs
+              value={selectedCourseTab ?? undefined}
+              onValueChange={(v) => setSelectedCourseTab(v)}
+            >
+              <TabsList className="bg-gray-800 border border-gray-700 rounded-md">
+                {courses.map((course) => (
+                  <TabsTrigger
+                    key={course.courseCode}
+                    value={course.courseCode}
+                    className="text-gray-200 data-[state=active]:bg-gray-700"
+                  >
+                    {course.courseCode}
+                  </TabsTrigger>
                 ))}
-              </div>
-            ) : (
-              <DataTable
-                data={filteredRecords}
-                columns={columns}
-                searchKey="courseCode"
-                emptyMessage="No attendance records found"
-              />
-            )
-          ) : (
-            isLoading ? (
-              <div className="space-y-3">
-                {Array.from({ length: 4 }).map((_, index) => (
-                  <div key={index} className="grid grid-cols-4 items-center gap-4">
-                    <Skeleton className="h-4 w-24 bg-gray-700" />
-                    <Skeleton className="h-4 w-32 bg-gray-700" />
-                    <Skeleton className="h-8 w-20 bg-gray-700" />
-                    <Skeleton className="h-4 w-28 bg-gray-700" />
-                  </div>
-                ))}
-              </div>
-            ) : courses.length ? (
-              <Tabs
-                value={selectedCourseTab ?? undefined}
-                onValueChange={(v) => setSelectedCourseTab(v)}
-              >
-                <TabsList className="bg-gray-800 border border-gray-700 rounded-md">
-                  {courses.map((course) => (
-                    <TabsTrigger
-                      key={course.courseCode}
-                      value={course.courseCode}
-                      className="text-gray-200 data-[state=active]:bg-gray-700"
-                    >
-                      {course.courseCode}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-                {courses.map((course) => {
-                  const courseRecords = records.filter(
-                    (r) => r.courseCode === course.courseCode
-                  );
-                  const total = courseRecords.length;
-                  const present = courseRecords.filter((r) => r.status === 'present').length;
-                  const late = courseRecords.filter((r) => r.status === 'late').length;
-                  const absent = courseRecords.filter((r) => r.status === 'absent').length;
-                  const presentPct = total ? (present / total) * 100 : 0;
-                  const latePct = total ? (late / total) * 100 : 0;
-                  const absentPct = total ? (absent / total) * 100 : 0;
+              </TabsList>
+              {courses.map((course) => {
+                const courseRecords = records.filter(
+                  (r) => r.courseCode === course.courseCode
+                );
+                const total = courseRecords.length;
+                const present = courseRecords.filter((r) => r.status === 'present').length;
+                const late = courseRecords.filter((r) => r.status === 'late').length;
+                const absent = courseRecords.filter((r) => r.status === 'absent').length;
+                const presentPct = total ? (present / total) * 100 : 0;
+                const latePct = total ? (late / total) * 100 : 0;
+                const absentPct = total ? (absent / total) * 100 : 0;
 
-                  return (
-                    <TabsContent key={course.courseCode} value={course.courseCode} className="mt-4">
-                      <DataTable
-                        data={courseRecords}
-                        columns={columns}
-                        searchKey="date"
-                        emptyMessage="No attendance records for this course"
-                      />
-                      <div className="mt-4 border-t border-gray-700 pt-3">
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="bg-gray-700 rounded-lg p-3 text-center">
-                            <p className="text-xs text-gray-300">Present</p>
-                            <p className="text-lg font-semibold text-emerald-400">
-                              {presentPct.toFixed(1)}%
-                            </p>
-                          </div>
-                          <div className="bg-gray-700 rounded-lg p-3 text-center">
-                            <p className="text-xs text-gray-300">Late</p>
-                            <p className="text-lg font-semibold text-amber-400">
-                              {latePct.toFixed(1)}%
-                            </p>
-                          </div>
-                          <div className="bg-gray-700 rounded-lg p-3 text-center">
-                            <p className="text-xs text-gray-300">Absent</p>
-                            <p className="text-lg font-semibold text-red-400">
-                              {absentPct.toFixed(1)}%
-                            </p>
-                          </div>
+                return (
+                  <TabsContent key={course.courseCode} value={course.courseCode} className="mt-4">
+                    <DataTable
+                      data={courseRecords}
+                      columns={columns}
+                      searchKey="date"
+                      emptyMessage="No attendance records for this course"
+                      isLoading={isLoading || !hasLoaded}
+                      skeletonRows={6}
+                      hideSearchWhileLoading
+                      skeletonColumns={columns.length}
+                      showEmptyState={hasLoaded}
+                    />
+                    <div className="mt-4 border-t border-gray-700 pt-3">
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-gray-700 rounded-lg p-3 text-center">
+                          <p className="text-xs text-gray-300">Present</p>
+                          <p className="text-lg font-semibold text-emerald-400">
+                            {presentPct.toFixed(1)}%
+                          </p>
+                        </div>
+                        <div className="bg-gray-700 rounded-lg p-3 text-center">
+                          <p className="text-xs text-gray-300">Late</p>
+                          <p className="text-lg font-semibold text-amber-400">
+                            {latePct.toFixed(1)}%
+                          </p>
+                        </div>
+                        <div className="bg-gray-700 rounded-lg p-3 text-center">
+                          <p className="text-xs text-gray-300">Absent</p>
+                          <p className="text-lg font-semibold text-red-400">
+                            {absentPct.toFixed(1)}%
+                          </p>
                         </div>
                       </div>
-                    </TabsContent>
-                  );
-                })}
-              </Tabs>
-            ) : (
-              <p className="text-sm text-gray-400">No courses available.</p>
-            )
+                    </div>
+                  </TabsContent>
+                );
+              })}
+            </Tabs>
+          ) : isLoading ? (
+            <DataTable
+              data={[]}
+              columns={columns}
+              searchKey="date"
+              emptyMessage="Loading attendance records"
+              isLoading
+              skeletonRows={6}
+              hideSearchWhileLoading
+              skeletonColumns={columns.length}
+              showEmptyState={hasLoaded}
+            />
+          ) : (
+            <p className="text-sm text-gray-400">No courses available.</p>
           )}
         </CardContent>
       </Card>
