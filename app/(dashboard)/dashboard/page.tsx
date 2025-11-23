@@ -5,6 +5,7 @@ import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StudentTableSkeleton } from '@/components/ui/student-skeleton';
 import { useAppStore } from '@/store';
 import { BookOpen, TrendingUp, Calendar, Award, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -114,6 +115,7 @@ export default function DashboardPage() {
 
   const isInitialLoading = loadingData && !data;
   const nextDeadline = formattedDeadlines[0];
+  const showHeroSkeleton = isInitialLoading;
 
   if (!user) {
     return <div className="text-gray-300">Sign in to view your dashboard.</div>;
@@ -152,15 +154,25 @@ export default function DashboardPage() {
           <div className="relative w-full max-w-sm overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-sky-500/25 via-indigo-500/20 to-transparent p-6 text-sm text-white shadow-[0_25px_70px_-45px_rgba(59,130,246,0.65)]">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(147,197,253,0.32),transparent_55%)]" />
             <div className="relative space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/75">Next focus</p>
-              <p className="text-lg font-semibold">
-                {nextDeadline ? nextDeadline.title : 'No deadlines on the horizon'}
-              </p>
-              <p className="text-sm text-white/80">
-                {nextDeadline
-                  ? `Due ${nextDeadline.dateLabel}`
-                  : 'You are all caught up for now. Take a deep breath and keep shining!'}
-              </p>
+              {showHeroSkeleton ? (
+                <>
+                  <Skeleton className="h-3 w-24 rounded-full bg-white/15" />
+                  <Skeleton className="h-6 w-48 rounded-lg bg-white/15" />
+                  <Skeleton className="h-4 w-40 rounded-full bg-white/12" />
+                </>
+              ) : (
+                <>
+                  <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/75">Next focus</p>
+                  <p className="text-lg font-semibold">
+                    {nextDeadline ? nextDeadline.title : 'No deadlines on the horizon'}
+                  </p>
+                  <p className="text-sm text-white/80">
+                    {nextDeadline
+                      ? `Due ${nextDeadline.dateLabel}`
+                      : 'You are all caught up for now. Take a deep breath and keep shining!'}
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -497,7 +509,9 @@ export default function DashboardPage() {
           <CardTitle className="text-white">Course-wise Attendance</CardTitle>
         </CardHeader>
         <CardContent>
-          {courseAttendance.length ? (
+          {isInitialLoading ? (
+            <StudentTableSkeleton rows={4} columns={3} />
+          ) : courseAttendance.length ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               {courseAttendance.map((stat) => {
                 const percentage = stat.percentage ?? 0;

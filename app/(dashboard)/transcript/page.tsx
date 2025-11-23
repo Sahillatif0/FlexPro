@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PDFButton } from '@/components/ui/pdf-button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Award,
   TrendingUp,
@@ -41,7 +41,7 @@ import {
 } from 'recharts';
 import { useAppStore } from '@/store';
 import { useToast } from '@/hooks/use-toast';
-import { StudentCardSkeleton, StudentMetricSkeleton } from '@/components/ui/student-skeleton';
+import { StudentCardSkeleton, StudentMetricSkeleton, StudentTableSkeleton } from '@/components/ui/student-skeleton';
 
 interface TranscriptRecord {
   id: string;
@@ -73,9 +73,7 @@ export default function TranscriptPage() {
   const { toast } = useToast();
   const [records, setRecords] = useState<TranscriptRecord[]>([]);
   const [summary, setSummary] = useState<TranscriptSummary | null>(null);
-  const [terms, setTerms] = useState<string[]>([]);
   const [termStats, setTermStats] = useState<TermStat[]>([]);
-  const [selectedTerm, setSelectedTerm] = useState('all');
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +112,6 @@ export default function TranscriptPage() {
 
         setRecords(payload.records);
         setSummary(payload.summary);
-        setTerms(payload.terms);
         setTermStats(payload.termStats);
         setHasLoaded(true);
       } catch (err: any) {
@@ -136,10 +133,10 @@ export default function TranscriptPage() {
     return () => controller.abort();
   }, [toast, user]);
 
-  const filteredRecords = useMemo(() => {
-    if (selectedTerm === 'all') return records;
-    return records.filter((record) => record.term === selectedTerm);
-  }, [records, selectedTerm]);
+  const unassignedRecords = useMemo(
+    () => records.filter((record) => !record.term),
+    [records]
+  );
 
   const termOrder = useMemo(() => {
     const parseTerm = (term: string) => {
@@ -234,6 +231,14 @@ export default function TranscriptPage() {
       };
     });
   }, [cgpaByTerm, perTermRecords, sgpaByTerm, termOrder]);
+
+  const chartDataByTermLookup = useMemo(() => {
+    const map: Record<string, (typeof chartDataByTerm)[number]> = {};
+    chartDataByTerm.forEach((entry) => {
+      map[entry.term] = entry;
+    });
+    return map;
+  }, [chartDataByTerm]);
 
   const gradeBucketsOverall = useMemo(() => {
     const buckets: Record<'A' | 'B' | 'C' | 'D' | 'F', number> = {
@@ -349,7 +354,7 @@ export default function TranscriptPage() {
               program: user.program,
               cgpa: cgpa !== null ? cgpa.toFixed(2) : 'N/A',
               totalCreditHours,
-              records: filteredRecords.length,
+              records: records.length,
               terms: termOrder.map((term) => ({
                 term,
                 sgpa: (sgpaByTerm[term] ?? 0).toFixed(2),
@@ -616,46 +621,110 @@ export default function TranscriptPage() {
         ) : null}
       </Card>
 
-      <Card className="bg-gray-800 border-gray-700">
-        <CardHeader>
-          <CardTitle className="text-white">Filter by Term</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Select value={selectedTerm} onValueChange={setSelectedTerm}>
-            <SelectTrigger className="w-48 bg-gray-700 border-gray-600 text-white">
-              <SelectValue placeholder="Select term" />
-            </SelectTrigger>
-            <SelectContent className="student-popover">
-              <SelectItem value="all" className="text-white">
-                All Terms
-              </SelectItem>
-              {terms.map((term) => (
-                <SelectItem key={term} value={term} className="text-white">
-                  {term}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        {showSkeletons ? (
+          Array.from({ length: 2 }).map((_, index) => (
+            <Card key={`term-skeleton-${index}`} className="bg-gray-800 border-gray-700">
+              <CardHeader className="space-y-3">
+                <Skeleton className="h-4 w-36 rounded-full bg-white/10" />
+                <Skeleton className="h-3 w-24 rounded-full bg-white/10" />
+              </CardHeader>
+              <CardContent>
+                <StudentTableSkeleton rows={4} columns={tableColumnCount} />
+              </CardContent>
+            </Card>
+          ))
+        ) : termOrder.length || unassignedRecords.length ? (
+          <>
+            {termOrder.map((term) => {
+              const termRecords = perTermRecords[term] ?? [];
+              const metrics = chartDataByTermLookup[term];
+              const termCredits = metrics?.credits ?? termRecords.reduce((sum, record) => sum + record.creditHours, 0);
+              const sgpaValue = metrics?.sgpa ?? 0;
+              const cgpaValue = metrics?.cgpa ?? 0;
+              const sgpaDisplay = termCredits > 0 ? sgpaValue.toFixed(2) : 'N/A';
+              const cgpaDisplay = termCredits > 0 ? cgpaValue.toFixed(2) : 'N/A';
 
-      <Card className="bg-gray-800 border-gray-700">
-        <CardHeader>
-          <CardTitle className="text-white">Grade Records</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            data={filteredRecords}
-            columns={tableColumns}
-            searchKey="courseTitle"
-            emptyMessage="No grade records found"
-            isLoading={isLoading}
-            hideSearchWhileLoading
-            skeletonColumns={tableColumnCount}
-            showEmptyState={hasLoaded}
-          />
-        </CardContent>
-      </Card>
+              return (
+                <Card key={term} className="bg-gray-800 border-gray-700">
+                  <CardHeader className="space-y-4 border-b border-white/5 pb-4">
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/40">Term Overview</p>
+                        <CardTitle className="text-white">{term}</CardTitle>
+                        <p className="text-sm text-gray-400">
+                          {termRecords.length} course{termRecords.length === 1 ? '' : 's'} • {termCredits} credit hour{termCredits === 1 ? '' : 's'}
+                        </p>
+                      </div>
+                      <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300/80">
+                        Academic snapshot
+                      </div>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      {[{ label: 'Courses', value: termRecords.length.toString() }, { label: 'Credits', value: termCredits.toString() }, { label: 'SGPA', value: sgpaDisplay }, { label: 'CGPA', value: cgpaDisplay }].map((metric) => (
+                        <div
+                          key={`${term}-${metric.label}`}
+                          className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300/80 backdrop-blur"
+                        >
+                          <span className="uppercase tracking-[0.25em] text-white/45">{metric.label}</span>
+                          <span className="text-sm font-semibold text-white">{metric.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <DataTable
+                      data={termRecords}
+                      columns={tableColumns}
+                      searchKey="courseTitle"
+                      emptyMessage="No courses recorded for this term"
+                      isLoading={isLoading}
+                      hideSearchWhileLoading
+                      skeletonColumns={tableColumnCount}
+                      showEmptyState={hasLoaded}
+                    />
+                  </CardContent>
+                </Card>
+              );
+            })}
+
+            {unassignedRecords.length ? (
+              <Card className="bg-gray-800 border-gray-700">
+                <CardHeader className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-white">Ungrouped Records</CardTitle>
+                    <p className="text-sm text-gray-400">Courses without a term assignment</p>
+                  </div>
+                  <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300/80">
+                    {unassignedRecords.length} course{unassignedRecords.length === 1 ? '' : 's'}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <DataTable
+                    data={unassignedRecords}
+                    columns={tableColumns}
+                    searchKey="courseTitle"
+                    emptyMessage="No unassigned records"
+                    isLoading={isLoading}
+                    hideSearchWhileLoading
+                    skeletonColumns={tableColumnCount}
+                    showEmptyState={hasLoaded}
+                  />
+                </CardContent>
+              </Card>
+            ) : null}
+          </>
+        ) : (
+          <Card className="bg-gray-800 border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white">Transcript Records</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-400">No transcript entries have been recorded yet.</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }

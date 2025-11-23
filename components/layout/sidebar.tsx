@@ -116,7 +116,7 @@ export function Sidebar() {
           )}
 
           {/* Navigation */}
-          <nav className="flex-1 space-y-2 px-4 py-6">
+          <nav className="student-scroll flex-1 space-y-2 overflow-y-auto pl-4 pr-2 py-6">
             {navigation.map((item, index) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;

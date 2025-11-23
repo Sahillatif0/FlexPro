@@ -32,13 +32,19 @@ export function Topbar() {
         </div>
       )}
 
-      <div className="flex-1">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400/70" />
-          <Input
-            placeholder="Search courses, deadlines, resources..."
-            className="student-input h-11 w-full pl-12 pr-4"
-          />
+      <div className="flex-1 max-w-xl">
+        <div className="group relative">
+          <div className="pointer-events-none absolute -inset-[1px] rounded-[1.05rem] bg-gradient-to-r from-sky-500/25 via-indigo-500/20 to-blue-500/20 opacity-0 blur-[1px] transition-opacity duration-300 group-hover:opacity-100 group-focus-within:opacity-100" />
+          <div className="relative overflow-hidden rounded-[1rem] border border-white/10 bg-[#0b1220]/80 backdrop-blur">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400/70 transition-colors duration-300 group-focus-within:text-blue-200 group-hover:text-blue-200" />
+            <Input
+              placeholder="Search courses, deadlines, resources..."
+              className="h-11 w-full rounded-[1rem] border border-transparent bg-transparent pl-12 pr-20 text-sm text-slate-100 placeholder:text-slate-400 focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 select-none rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.2em] text-slate-200/75">
+              Ctrl K
+            </span>
+          </div>
         </div>
       </div>
 
