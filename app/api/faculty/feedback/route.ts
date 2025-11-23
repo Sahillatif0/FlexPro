@@ -44,16 +44,28 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const facultyId = searchParams.get("facultyId");
+
+    if (!facultyId) {
+      return NextResponse.json({ message: "facultyId is required" }, { status: 400 });
+    }
+
+    if (sessionUser.role === "faculty" && sessionUser.id !== facultyId) {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
+
     const feedbackEntries = await prisma.feedback.findMany({
       where: {
         isAnonymous: true,
         course: {
           sections: {
             some: {
-              instructorId: sessionUser.id,
+              instructorId: facultyId,
             },
           },
         },
+        facultyId,
       },
       include: {
         course: true,

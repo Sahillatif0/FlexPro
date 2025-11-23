@@ -17,6 +17,8 @@ interface PendingFeedbackItem {
   code: string;
   title: string;
   instructor: string;
+  facultyName: string | null;
+  facultyId: string | null;
   termId: string;
   term: string | null;
 }
@@ -30,6 +32,8 @@ interface SubmittedFeedbackItem {
   term: string | null;
   rating: number;
   comment: string;
+  facultyId: string | null;
+  facultyName: string | null;
   submittedAt: string;
 }
 
@@ -179,7 +183,14 @@ export default function FeedbackPage() {
         key: 'instructor',
         title: 'Instructor',
         render: (value: string) => (
-          <span className="text-gray-300 text-sm">{value}</span>
+          <span className="text-gray-300 text-sm">{value || 'Faculty'}</span>
+        ),
+      },
+      {
+        key: 'facultyName',
+        title: 'Instructor',
+        render: (value: string | null) => (
+          <span className="text-gray-300 text-sm">{value || 'Faculty'}</span>
         ),
       },
       {
@@ -251,6 +262,13 @@ export default function FeedbackPage() {
 
   const handleSubmitFeedback = async () => {
     if (!user || !activeCourse) return;
+    if (!activeCourse.facultyId) {
+      toast({
+        title: 'Unable to submit feedback',
+        description: 'No instructor is assigned to this course yet.',
+      });
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -263,8 +281,10 @@ export default function FeedbackPage() {
           userId: user.id,
           courseId: activeCourse.courseId,
           termId: activeCourse.termId,
+          facultyId: activeCourse.facultyId,
           rating,
           comment,
+          isAnonymous: true,
         }),
       });
 

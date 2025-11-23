@@ -16,9 +16,15 @@ interface UpdatePayload {
 
 type AllowedStatus = (typeof ALLOWED_STATUSES)[number];
 
+type GradeRequestParams = { id: string };
+
+function resolveParams<T>(params: T | Promise<T>): Promise<T> {
+  return Promise.resolve(params);
+}
+
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: GradeRequestParams | Promise<GradeRequestParams> }
 ) {
   try {
     const sessionUser = await getSessionFromRequest(request);
@@ -31,7 +37,8 @@ export async function PATCH(
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
-    const requestId = params?.id;
+    const params = await resolveParams(context.params);
+    const requestId = typeof params?.id === "string" ? decodeURIComponent(params.id).trim() : "";
     if (!requestId) {
       return NextResponse.json({ message: "Request id is required" }, { status: 400 });
     }

@@ -21,10 +21,16 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const courseId = searchParams.get("courseId");
     const termId = searchParams.get("termId");
+    const sectionIdParam = searchParams.get("sectionId");
 
     if (!courseId || !termId) {
       return NextResponse.json({ message: "courseId and termId are required" }, { status: 400 });
     }
+
+    const normalizedSectionId = sectionIdParam && sectionIdParam.trim().length ? sectionIdParam.trim() : null;
+    const filterAllSections = !normalizedSectionId || normalizedSectionId === "ALL";
+    const filterUnassigned = normalizedSectionId === "__unassigned__";
+    let selectedSectionName: string | null = null;
 
     // Verify faculty teaches this course
     const course = await prisma.course.findFirst({
@@ -47,6 +53,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: "Course not found" }, { status: 404 });
     }
 
+    if (!filterAllSections && !filterUnassigned) {
+      const matchingSection = course.sections.find((section) => section.id === normalizedSectionId);
+      if (!matchingSection) {
+        return NextResponse.json({ message: "Section not found" }, { status: 404 });
+      }
+      selectedSectionName = matchingSection.name.trim().toLowerCase();
+    }
+
     const sectionNameSet = new Set(
       course.sections
         .map((section) => section.name.trim().toLowerCase())
@@ -54,7 +68,7 @@ export async function GET(request: Request) {
     );
 
     // Fetch enrollments with student marks
-    const enrollments = await prisma.enrollment.findMany({
+    const enrollments = (await prisma.enrollment.findMany({
       where: {
         courseId,
         termId,
@@ -62,16 +76,33 @@ export async function GET(request: Request) {
       include: {
         user: true,
         studentMark: true,
-      },
-    });
+      } as any,
+    })) as unknown as Array<{
+      userId: string;
+      user: { section: string | null };
+      studentMark: any;
+    }>;
 
     const records = enrollments
       .filter((enrollment) => {
         const normalizedStudentSection = (enrollment.user?.section ?? "").trim().toLowerCase();
+        if (filterUnassigned) {
+          return !normalizedStudentSection || !sectionNameSet.has(normalizedStudentSection);
+        }
+
         if (!normalizedStudentSection) {
+          return filterAllSections;
+        }
+
+        if (!sectionNameSet.has(normalizedStudentSection)) {
+          return false;
+        }
+
+        if (filterAllSections) {
           return true;
         }
-        return sectionNameSet.has(normalizedStudentSection);
+
+        return normalizedStudentSection === selectedSectionName;
       })
       .map((enrollment) => ({
         userId: enrollment.userId,
@@ -101,6 +132,11 @@ export async function POST(request: Request) {
     const courseId = body?.courseId as string | undefined;
     const termId = body?.termId as string | undefined;
     const entries = Array.isArray(body?.entries) ? body.entries : [];
+    const rawSectionId = typeof body?.sectionId === "string" ? body.sectionId.trim() : "";
+    const sectionId = rawSectionId && rawSectionId !== "ALL" ? rawSectionId : null;
+    const filterUnassigned = sectionId === "__unassigned__";
+    const requiresSpecificSection = !!sectionId && !filterUnassigned;
+    let selectedSectionName: string | null = null;
 
     if (!courseId || !termId) {
       return NextResponse.json({ message: "courseId and termId are required" }, { status: 400 });
@@ -127,6 +163,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "Course not found" }, { status: 404 });
     }
 
+    if (requiresSpecificSection) {
+      const matchingSection = course.sections.find((section) => section.id === sectionId);
+      if (!matchingSection) {
+        return NextResponse.json({ message: "Section not found" }, { status: 404 });
+      }
+      selectedSectionName = matchingSection.name.trim().toLowerCase();
+    }
+
     const sectionNameSet = new Set(
       course.sections
         .map((section) => section.name.trim().toLowerCase())
@@ -135,7 +179,7 @@ export async function POST(request: Request) {
 
     // Get enrollments to verify students and get enrollment IDs
     const studentIds = entries.map((e: any) => e.userId);
-    const enrollments = await prisma.enrollment.findMany({
+    const enrollments = (await prisma.enrollment.findMany({
       where: {
         courseId,
         termId,
@@ -143,25 +187,43 @@ export async function POST(request: Request) {
       },
       include: {
         user: true,
-      },
-    });
+      } as any,
+    })) as unknown as Array<{
+      id: string;
+      userId: string;
+      user: { section: string | null };
+    }>;
 
     const validEnrollments = enrollments.filter((enrollment) => {
       const normalizedStudentSection = (enrollment.user?.section ?? "").trim().toLowerCase();
+      if (filterUnassigned) {
+        return !normalizedStudentSection || !sectionNameSet.has(normalizedStudentSection);
+      }
+
       if (!normalizedStudentSection) {
+        return !sectionId;
+      }
+
+      if (!sectionNameSet.has(normalizedStudentSection)) {
+        return false;
+      }
+
+      if (!sectionId) {
         return true;
       }
-      return sectionNameSet.has(normalizedStudentSection);
+
+      return normalizedStudentSection === selectedSectionName;
     });
 
     const enrollmentMap = new Map(validEnrollments.map((e) => [e.userId, e.id]));
+    const studentMarkDelegate = (prisma as any).studentMark;
 
     const tasks = entries
       .filter((entry: any) => enrollmentMap.has(entry.userId))
       .map((entry: any) => {
         const enrollmentId = enrollmentMap.get(entry.userId)!;
 
-        return prisma.studentMark.upsert({
+        return studentMarkDelegate.upsert({
           where: {
             enrollmentId,
           },

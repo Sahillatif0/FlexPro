@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { MessageCircle, Star, ThumbsUp, AlertTriangle } from 'lucide-react';
+import { useAppStore } from '@/store';
 
 interface FeedbackItem {
   id: string;
@@ -68,8 +69,9 @@ const ratingLabel: Record<number, string> = {
   5: 'Excellent',
 };
 
-export default function FacultyAnonymousFeedbackPage() {
+export default function FacultyFeedbackPage() {
   const { toast } = useToast();
+  const facultyId = useAppStore((state) => state.user?.id);
   const [data, setData] = useState<FacultyFeedbackResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -78,10 +80,13 @@ export default function FacultyAnonymousFeedbackPage() {
   const [ratingFilter, setRatingFilter] = useState<RatingFilter>('all');
 
   const fetchFeedback = useCallback(async () => {
+    if (!facultyId) {
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/faculty/feedback');
+      const response = await fetch(`/api/faculty/feedback?facultyId=${encodeURIComponent(facultyId)}`);
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload?.message ?? 'Failed to load feedback');
@@ -100,11 +105,13 @@ export default function FacultyAnonymousFeedbackPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [facultyId, toast]);
 
   useEffect(() => {
-    fetchFeedback();
-  }, [fetchFeedback]);
+    if (facultyId) {
+      fetchFeedback();
+    }
+  }, [facultyId, fetchFeedback]);
 
   const filteredFeedback = useMemo(() => {
     if (!data) {
@@ -148,7 +155,7 @@ export default function FacultyAnonymousFeedbackPage() {
           Anonymous Feedback
         </h1>
         <p className="text-sm text-gray-400">
-          Review anonymous feedback submitted for your courses to spot trends and track sentiment.
+          Review anonymized feedback submitted for your courses to understand student sentiment and trends.
         </p>
       </div>
 
@@ -360,18 +367,22 @@ export default function FacultyAnonymousFeedbackPage() {
             <div className="space-y-4">
               {filteredFeedback.map((item) => (
                 <div key={item.id} className="rounded-lg bg-gray-800/60 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-1">
                       <p className="text-sm text-white font-medium">
                         {item.courseCode} · {item.courseTitle}
                       </p>
-                      {item.termName ? (
-                        <p className="text-xs text-gray-400">{item.termName}</p>
-                      ) : null}
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                        {item.termName ? <span>{item.termName}</span> : null}
+                        {item.termName ? <span className="hidden sm:inline">•</span> : null}
+                        <span>Submitted anonymously</span>
+                      </div>
                     </div>
-                    <Badge variant="secondary" className="bg-emerald-600/20 text-emerald-400">
-                      {item.rating} ★
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary" className="bg-emerald-600/20 text-emerald-400">
+                        {item.rating} ★
+                      </Badge>
+                    </div>
                   </div>
                   <p className="text-sm text-gray-200 whitespace-pre-line">
                     {item.comment || 'No comment provided.'}

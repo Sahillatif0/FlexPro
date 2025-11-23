@@ -36,6 +36,7 @@ model User {
   feeInvoices     FeeInvoice[]
   feePayments     FeePayment[]
   feedbacks       Feedback[]
+  facultyFeedback Feedback[] @relation("FeedbackFaculty")
   gradeRequests   GradeRequest[]
   studyPlans      StudyPlan[]
   teachingSections CourseSection[] @relation("CourseSectionInstructor")
@@ -213,6 +214,7 @@ model Feedback {
   userId      String
   courseId    String
   termId      String
+  facultyId   String?
   rating      Int // 1-5 stars
   comment     String?
   isAnonymous Boolean  @default(false)
@@ -221,6 +223,7 @@ model Feedback {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   course Course @relation(fields: [courseId], references: [id])
   term   Term   @relation(fields: [termId], references: [id])
+  faculty User?  @relation("FeedbackFaculty", fields: [facultyId], references: [id])
 
   @@unique([userId, courseId, termId])
   @@map("feedbacks")
