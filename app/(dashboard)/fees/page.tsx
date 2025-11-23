@@ -45,7 +45,7 @@ export default function FeesPage() {
     const controller = new AbortController();
 
     async function loadFees() {
-      if(!user) return;
+      if (!user) return;
       setIsLoading(true);
       setHasLoaded(false);
       setError(null);
@@ -131,8 +131,8 @@ export default function FeesPage() {
               value === 'paid'
                 ? 'bg-emerald-600'
                 : value === 'pending'
-                ? 'bg-amber-600'
-                : ''
+                  ? 'bg-amber-600'
+                  : ''
             }
           >
             {value}
@@ -158,10 +158,12 @@ export default function FeesPage() {
               variant="outline"
               size="sm"
             />
-            {item.status === 'pending' && (
-              <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
-                Pay Now
-              </Button>
+            {item.status === 'pending' && item.amount > 0 && (
+              <Link href={`/fees/payment?invoiceId=${item.id}&amount=${item.amount}`}>
+                <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+                  Pay Now
+                </Button>
+              </Link>
             )}
           </div>
         ),
@@ -195,10 +197,14 @@ export default function FeesPage() {
               Generate Challan
             </Button>
           </Link>
-          <Button className="bg-blue-600 hover:bg-blue-700">
-            <CreditCard className="h-4 w-4 mr-2" />
-            Pay Online
-          </Button>
+          {summary?.nextDueDate && (invoices.find(i => i.status === 'pending')?.amount ?? 0) > 0 && (
+            <Link href={`/fees/payment?invoiceId=${invoices.find(i => i.status === 'pending')?.id}&amount=${invoices.find(i => i.status === 'pending')?.amount}`}>
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <CreditCard className="h-4 w-4 mr-2" />
+                Pay Online
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -212,45 +218,45 @@ export default function FeesPage() {
       <div className="grid gap-4 md:grid-cols-3">
         {showSkeletons
           ? Array.from({ length: 3 }).map((_, index) => (
-              <StudentMetricSkeleton key={index} />
-            ))
+            <StudentMetricSkeleton key={index} />
+          ))
           : (
-              <>
-                <Card className="bg-gray-800 border-gray-700">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-gray-400 text-sm">Total Paid</p>
-                        <p className="text-2xl font-bold text-emerald-400">PKR {totalPaid.toLocaleString()}</p>
-                      </div>
-                      <DollarSign className="h-8 w-8 text-emerald-500" />
+            <>
+              <Card className="bg-gray-800 border-gray-700">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-400 text-sm">Total Paid</p>
+                      <p className="text-2xl font-bold text-emerald-400">PKR {totalPaid.toLocaleString()}</p>
                     </div>
-                  </CardContent>
-                </Card>
-                <Card className="bg-gray-800 border-gray-700">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-gray-400 text-sm">Total Pending</p>
-                        <p className="text-2xl font-bold text-amber-400">PKR {totalPending.toLocaleString()}</p>
-                      </div>
-                      <Wallet className="h-8 w-8 text-amber-500" />
+                    <DollarSign className="h-8 w-8 text-emerald-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-gray-800 border-gray-700">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-400 text-sm">Total Pending</p>
+                      <p className="text-2xl font-bold text-amber-400">PKR {totalPending.toLocaleString()}</p>
                     </div>
-                  </CardContent>
-                </Card>
-                <Card className="bg-gray-800 border-gray-700">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-gray-400 text-sm">Next Due Date</p>
-                        <p className="text-2xl font-bold text-white">{nextDueDate}</p>
-                      </div>
-                      <Calendar className="h-8 w-8 text-blue-500" />
+                    <Wallet className="h-8 w-8 text-amber-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-gray-800 border-gray-700">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-400 text-sm">Next Due Date</p>
+                      <p className="text-2xl font-bold text-white">{nextDueDate}</p>
                     </div>
-                  </CardContent>
-                </Card>
-              </>
-            )}
+                    <Calendar className="h-8 w-8 text-blue-500" />
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
       </div>
 
       {/* Fee Invoices Table */}
