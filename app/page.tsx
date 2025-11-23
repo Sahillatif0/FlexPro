@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const { setUser } = useAppStore();
@@ -24,7 +25,7 @@ export default function LoginPage() {
     e.preventDefault();
     setFormError(null);
 
-    const parsed = loginSchema.safeParse({ identifier, password });
+    const parsed = loginSchema.safeParse({ identifier, password, rememberMe });
     if (!parsed.success) {
       const fieldErrors = parsed.error.flatten().fieldErrors;
       setFormError(fieldErrors.identifier?.[0] || fieldErrors.password?.[0] || 'Invalid input');
@@ -58,8 +59,8 @@ export default function LoginPage() {
         result.user.role === 'faculty'
           ? '/faculty/dashboard'
           : result.user.role === 'admin'
-          ? '/admin/dashboard'
-          : '/dashboard';
+            ? '/admin/dashboard'
+            : '/dashboard';
 
       router.push(destination);
     } catch (error) {
@@ -123,6 +124,21 @@ export default function LoginPage() {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="rememberMe"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-900"
+              />
+              <label
+                htmlFor="rememberMe"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-gray-300"
+              >
+                Stay signed in
+              </label>
             </div>
             <Button
               type="submit"
