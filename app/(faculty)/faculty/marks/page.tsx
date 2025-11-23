@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -7,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface TeachingStudent {
   userId: string;
@@ -16,10 +18,16 @@ interface TeachingStudent {
   email: string;
 }
 
+interface TeachingSection {
+  sectionId: string;
+  sectionName: string;
+  students: TeachingStudent[];
+}
+
 interface TeachingTerm {
   termId: string;
   termName: string;
-  students: TeachingStudent[];
+  sections: TeachingSection[];
 }
 
 interface TeachingCourse {
@@ -29,30 +37,36 @@ interface TeachingCourse {
   terms: TeachingTerm[];
 }
 
-interface GradeRecord {
-  userId: string;
-  grade: string | null;
-  gradePoints: number | null;
+interface StudentMark {
+  assignment1: number;
+  assignment2: number;
+  quiz1: number;
+  quiz2: number;
+  quiz3: number;
+  quiz4: number;
+  mid1: number;
+  mid2: number;
+  finalExam: number;
+  graceMarks: number;
+  total: number;
 }
 
-type GradeEntry = {
-  grade: string;
-  gradePoints: string;
-};
+interface MarkRecord {
+  userId: string;
+  studentMark: StudentMark | null;
+}
 
-const GRADE_POINTS: Record<string, string> = {
-  "A+": "4.00",
-  A: "4.00",
-  "A-": "3.67",
-  "B+": "3.33",
-  B: "3.00",
-  "B-": "2.67",
-  "C+": "2.33",
-  C: "2.00",
-  "C-": "1.67",
-  "D+": "1.33",
-  D: "1.00",
-  F: "0.00",
+const MAX_MARKS = {
+  assignment1: 5,
+  assignment2: 5,
+  quiz1: 2.5,
+  quiz2: 2.5,
+  quiz3: 2.5,
+  quiz4: 2.5,
+  mid1: 15,
+  mid2: 15,
+  finalExam: 50,
+  graceMarks: 8,
 };
 
 export default function FacultyMarksPage() {
@@ -61,10 +75,11 @@ export default function FacultyMarksPage() {
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
   const [selectedCourseId, setSelectedCourseId] = useState<string>("");
   const [selectedTermId, setSelectedTermId] = useState<string>("");
-  const [gradeEntries, setGradeEntries] = useState<Record<string, GradeEntry>>({});
-  const [isLoadingGrades, setIsLoadingGrades] = useState(false);
+  const [marksEntries, setMarksEntries] = useState<Record<string, StudentMark>>({});
+  const [isLoadingMarks, setIsLoadingMarks] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [graceMarksInput, setGraceMarksInput] = useState<string>("");
 
   useEffect(() => {
     let cancelled = false;
@@ -125,6 +140,11 @@ export default function FacultyMarksPage() {
     return activeCourse.terms.find((term) => term.termId === selectedTermId);
   }, [activeCourse, selectedTermId]);
 
+  const allStudents = useMemo(() => {
+    if (!activeTerm) return [];
+    return activeTerm.sections.flatMap((section) => section.students);
+  }, [activeTerm]);
+
   useEffect(() => {
     if (!selectedCourseId || !selectedTermId) {
       return;
@@ -133,8 +153,8 @@ export default function FacultyMarksPage() {
     let cancelled = false;
     const controller = new AbortController();
 
-    async function loadGrades() {
-      setIsLoadingGrades(true);
+    async function loadMarks() {
+      setIsLoadingMarks(true);
       try {
         const params = new URLSearchParams({
           courseId: selectedCourseId,
@@ -145,18 +165,31 @@ export default function FacultyMarksPage() {
         });
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
-          throw new Error(payload?.message ?? "Failed to load gradebook");
+          throw new Error(payload?.message ?? "Failed to load marks");
         }
-        const payload: { records: GradeRecord[] } = await response.json();
+        const payload: { records: MarkRecord[] } = await response.json();
         if (!cancelled) {
-          const nextEntries: Record<string, GradeEntry> = {};
+          const nextEntries: Record<string, StudentMark> = {};
           payload.records.forEach((record) => {
-            nextEntries[record.userId] = {
-              grade: record.grade ?? "",
-              gradePoints: record.gradePoints !== null ? record.gradePoints.toFixed(2) : "",
-            };
+            if (record.studentMark) {
+              nextEntries[record.userId] = record.studentMark;
+            } else {
+              nextEntries[record.userId] = {
+                assignment1: 0,
+                assignment2: 0,
+                quiz1: 0,
+                quiz2: 0,
+                quiz3: 0,
+                quiz4: 0,
+                mid1: 0,
+                mid2: 0,
+                finalExam: 0,
+                graceMarks: 0,
+                total: 0,
+              };
+            }
           });
-          setGradeEntries(nextEntries);
+          setMarksEntries(nextEntries);
         }
       } catch (err: any) {
         if (err?.name === "AbortError") {
@@ -167,26 +200,101 @@ export default function FacultyMarksPage() {
         }
       } finally {
         if (!cancelled) {
-          setIsLoadingGrades(false);
+          setIsLoadingMarks(false);
         }
       }
     }
 
-    loadGrades();
+    loadMarks();
     return () => {
       cancelled = true;
       controller.abort();
     };
   }, [selectedCourseId, selectedTermId]);
 
-  const updateGrade = (userId: string, updates: Partial<GradeEntry>) => {
-    setGradeEntries((prev) => ({
-      ...prev,
-      [userId]: {
-        grade: updates.grade ?? prev[userId]?.grade ?? "",
-        gradePoints: updates.gradePoints ?? prev[userId]?.gradePoints ?? "",
-      },
-    }));
+  const updateMark = (userId: string, field: keyof StudentMark, value: string) => {
+    const numValue = parseFloat(value);
+    let safeValue = isNaN(numValue) ? 0 : numValue;
+
+    // Validation: Clamp value to max marks
+    if (field in MAX_MARKS) {
+      const max = MAX_MARKS[field as keyof typeof MAX_MARKS];
+      if (safeValue > max) {
+        safeValue = max;
+        toast({
+          title: "Invalid Mark",
+          description: `Maximum mark for ${field} is ${max}`,
+          variant: "destructive",
+        });
+      }
+    }
+
+    if (safeValue < 0) safeValue = 0;
+
+    setMarksEntries((prev) => {
+      const current = prev[userId] ?? {
+        assignment1: 0, assignment2: 0, quiz1: 0, quiz2: 0, quiz3: 0, quiz4: 0, mid1: 0, mid2: 0, finalExam: 0, graceMarks: 0, total: 0
+      };
+
+      const updated = { ...current, [field]: safeValue };
+
+      // Recalculate total
+      updated.total =
+        updated.assignment1 + updated.assignment2 +
+        updated.quiz1 + updated.quiz2 + updated.quiz3 + updated.quiz4 +
+        updated.mid1 + updated.mid2 +
+        updated.finalExam + updated.graceMarks;
+
+      return {
+        ...prev,
+        [userId]: updated,
+      };
+    });
+  };
+
+  const applyGraceMarksToAll = () => {
+    const value = parseFloat(graceMarksInput);
+    if (isNaN(value)) return;
+
+    if (value > MAX_MARKS.graceMarks) {
+      toast({
+        title: "Invalid Grace Marks",
+        description: `Maximum grace marks allowed is ${MAX_MARKS.graceMarks}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (value < 0) {
+      toast({
+        title: "Invalid Grace Marks",
+        description: "Grace marks cannot be negative",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setMarksEntries((prev) => {
+      const next = { ...prev };
+      allStudents.forEach((student) => {
+        const current = next[student.userId] ?? {
+          assignment1: 0, assignment2: 0, quiz1: 0, quiz2: 0, quiz3: 0, quiz4: 0, mid1: 0, mid2: 0, finalExam: 0, graceMarks: 0, total: 0
+        };
+        const updated = { ...current, graceMarks: value };
+        updated.total =
+          updated.assignment1 + updated.assignment2 +
+          updated.quiz1 + updated.quiz2 + updated.quiz3 + updated.quiz4 +
+          updated.mid1 + updated.mid2 +
+          updated.finalExam + updated.graceMarks;
+        next[student.userId] = updated;
+      });
+      return next;
+    });
+
+    toast({
+      title: "Grace Marks Applied",
+      description: `Applied ${value} grace marks to all students.`,
+    });
   };
 
   const handleSave = async () => {
@@ -196,12 +304,13 @@ export default function FacultyMarksPage() {
 
     try {
       setIsSaving(true);
-      const entries = activeTerm?.students?.map((student) => {
-        const current = gradeEntries[student.userId] ?? { grade: "", gradePoints: "" };
+      const entries = allStudents.map((student) => {
+        const current = marksEntries[student.userId] ?? {
+          assignment1: 0, assignment2: 0, quiz1: 0, quiz2: 0, quiz3: 0, quiz4: 0, mid1: 0, mid2: 0, finalExam: 0, graceMarks: 0, total: 0
+        };
         return {
           userId: student.userId,
-          grade: current.grade || null,
-          gradePoints: current.gradePoints ? parseFloat(current.gradePoints) : null,
+          ...current
         };
       });
 
@@ -220,16 +329,16 @@ export default function FacultyMarksPage() {
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload?.message ?? "Failed to save gradebook");
+        throw new Error(payload?.message ?? "Failed to save marks");
       }
 
       toast({
-        title: "Grades updated",
-        description: payload?.message ?? "Gradebook saved successfully.",
+        title: "Marks updated",
+        description: payload?.message ?? "Marks saved successfully.",
       });
     } catch (err: any) {
       toast({
-        title: "Unable to save grades",
+        title: "Unable to save marks",
         description: err?.message ?? "Unexpected error",
         variant: "destructive",
       });
@@ -241,9 +350,9 @@ export default function FacultyMarksPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold text-white">Gradebook</h1>
+        <h1 className="text-2xl font-semibold text-white">Marks Management</h1>
         <p className="text-sm text-gray-400">
-          Assign term grades for each enrolled student.
+          Enter marks for assignments, quizzes, mids, and final exam.
         </p>
       </div>
 
@@ -255,11 +364,11 @@ export default function FacultyMarksPage() {
 
       <Card className="bg-gray-900 border-gray-800">
         <CardHeader>
-          <CardTitle className="text-white">Gradebook Context</CardTitle>
+          <CardTitle className="text-white">Context</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
+        <CardContent className="grid gap-4 md:grid-cols-2">
           {isLoadingCourses ? (
-            Array.from({ length: 3 }).map((_, index) => (
+            Array.from({ length: 2 }).map((_, index) => (
               <Skeleton key={index} className="h-10 bg-gray-800" />
             ))
           ) : (
@@ -303,83 +412,89 @@ export default function FacultyMarksPage() {
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="space-y-2">
-                <label className="text-sm text-gray-300">Grading Scale</label>
-                <div className="rounded-md border border-gray-700 bg-gray-800 p-3 text-xs text-gray-300">
-                  Grades automatically default to the standard 4.0 scale. Adjust grade points if needed.
-                </div>
-              </div>
             </>
           )}
         </CardContent>
       </Card>
 
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader>
-          <CardTitle className="text-white">Students</CardTitle>
+      <Card className="bg-gray-900 border-gray-800 overflow-hidden">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-white">Student Marks</CardTitle>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400">Grace Marks (Max 8):</span>
+              <Input
+                className="h-8 w-20 bg-gray-800 border-gray-700 text-center"
+                value={graceMarksInput}
+                onChange={(e) => setGraceMarksInput(e.target.value)}
+                placeholder="0"
+              />
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={applyGraceMarksToAll}
+                disabled={!activeTerm}
+              >
+                Apply to All
+              </Button>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="p-0">
           {isLoadingCourses || !activeTerm ? (
-            <div className="space-y-3">
+            <div className="p-4 space-y-3">
               {Array.from({ length: 5 }).map((_, index) => (
-                <div key={index} className="grid grid-cols-1 md:grid-cols-[2fr,1fr,1fr] gap-4 items-center">
-                  <Skeleton className="h-5 bg-gray-800" />
-                  <Skeleton className="h-10 bg-gray-800" />
-                  <Skeleton className="h-10 bg-gray-800" />
-                </div>
+                <Skeleton key={index} className="h-10 bg-gray-800" />
               ))}
             </div>
-          ) : activeTerm?.students?.length === 0 ? (
-            <p className="text-sm text-gray-400">No students are enrolled for the selected course and term.</p>
+          ) : allStudents.length === 0 ? (
+            <div className="p-4 text-sm text-gray-400">No students are enrolled for the selected course and term.</div>
           ) : (
-            <div className="space-y-3">
-              {activeTerm?.students?.map((student) => {
-                const entry = gradeEntries[student.userId] ?? { grade: "", gradePoints: "" };
-                return (
-                  <div
-                    key={student.userId}
-                    className="grid grid-cols-1 md:grid-cols-[2fr,1fr,1fr] gap-4 rounded-lg bg-gray-800/60 p-4"
-                  >
-                    <div>
-                      <p className="text-white font-medium">
-                        {student.firstName} {student.lastName}
-                      </p>
-                      <p className="text-xs text-gray-400">{student.studentId}</p>
-                      <p className="text-xs text-gray-500">{student.email}</p>
-                    </div>
-                    <Select
-                      value={entry.grade}
-                      onValueChange={(value) =>
-                        updateGrade(student.userId, {
-                          grade: value,
-                          gradePoints: GRADE_POINTS[value] ?? entry.gradePoints,
-                        })
-                      }
-                    >
-                      <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
-                        <SelectValue placeholder="Grade" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-gray-900 border-gray-800">
-                        <SelectItem value="" className="text-gray-300">
-                          Not graded
-                        </SelectItem>
-                        {Object.keys(GRADE_POINTS).map((grade) => (
-                          <SelectItem key={grade} value={grade} className="text-white">
-                            {grade}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      value={entry.gradePoints}
-                      onChange={(event) => updateGrade(student.userId, { gradePoints: event.target.value })}
-                      placeholder="Grade Points"
-                      className="bg-gray-800 border-gray-700 text-white"
-                    />
-                  </div>
-                );
-              })}
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-gray-800/50">
+                  <TableRow className="border-gray-800 hover:bg-transparent">
+                    <TableHead className="text-gray-300 min-w-[200px]">Student</TableHead>
+                    <TableHead className="text-gray-300 text-center w-[80px]">A1 (5)</TableHead>
+                    <TableHead className="text-gray-300 text-center w-[80px]">A2 (5)</TableHead>
+                    <TableHead className="text-gray-300 text-center w-[80px]">Q1 (2.5)</TableHead>
+                    <TableHead className="text-gray-300 text-center w-[80px]">Q2 (2.5)</TableHead>
+                    <TableHead className="text-gray-300 text-center w-[80px]">Q3 (2.5)</TableHead>
+                    <TableHead className="text-gray-300 text-center w-[80px]">Q4 (2.5)</TableHead>
+                    <TableHead className="text-gray-300 text-center w-[80px]">M1 (15)</TableHead>
+                    <TableHead className="text-gray-300 text-center w-[80px]">M2 (15)</TableHead>
+                    <TableHead className="text-gray-300 text-center w-[80px]">Final (50)</TableHead>
+                    <TableHead className="text-gray-300 text-center w-[80px]">Grace (8)</TableHead>
+                    <TableHead className="text-gray-300 text-center w-[80px] font-bold">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {allStudents.map((student) => {
+                    const entry = marksEntries[student.userId] ?? {
+                      assignment1: 0, assignment2: 0, quiz1: 0, quiz2: 0, quiz3: 0, quiz4: 0, mid1: 0, mid2: 0, finalExam: 0, graceMarks: 0, total: 0
+                    };
+                    return (
+                      <TableRow key={student.userId} className="border-gray-800 hover:bg-gray-800/30">
+                        <TableCell className="font-medium">
+                          <div className="text-white">{student.firstName} {student.lastName}</div>
+                          <div className="text-xs text-gray-500">{student.studentId}</div>
+                        </TableCell>
+                        <TableCell><Input className="h-8 bg-gray-800 border-gray-700 text-center" value={entry.assignment1} onChange={(e) => updateMark(student.userId, 'assignment1', e.target.value)} /></TableCell>
+                        <TableCell><Input className="h-8 bg-gray-800 border-gray-700 text-center" value={entry.assignment2} onChange={(e) => updateMark(student.userId, 'assignment2', e.target.value)} /></TableCell>
+                        <TableCell><Input className="h-8 bg-gray-800 border-gray-700 text-center" value={entry.quiz1} onChange={(e) => updateMark(student.userId, 'quiz1', e.target.value)} /></TableCell>
+                        <TableCell><Input className="h-8 bg-gray-800 border-gray-700 text-center" value={entry.quiz2} onChange={(e) => updateMark(student.userId, 'quiz2', e.target.value)} /></TableCell>
+                        <TableCell><Input className="h-8 bg-gray-800 border-gray-700 text-center" value={entry.quiz3} onChange={(e) => updateMark(student.userId, 'quiz3', e.target.value)} /></TableCell>
+                        <TableCell><Input className="h-8 bg-gray-800 border-gray-700 text-center" value={entry.quiz4} onChange={(e) => updateMark(student.userId, 'quiz4', e.target.value)} /></TableCell>
+                        <TableCell><Input className="h-8 bg-gray-800 border-gray-700 text-center" value={entry.mid1} onChange={(e) => updateMark(student.userId, 'mid1', e.target.value)} /></TableCell>
+                        <TableCell><Input className="h-8 bg-gray-800 border-gray-700 text-center" value={entry.mid2} onChange={(e) => updateMark(student.userId, 'mid2', e.target.value)} /></TableCell>
+                        <TableCell><Input className="h-8 bg-gray-800 border-gray-700 text-center" value={entry.finalExam} onChange={(e) => updateMark(student.userId, 'finalExam', e.target.value)} /></TableCell>
+                        <TableCell><Input className="h-8 bg-gray-800 border-gray-700 text-center" value={entry.graceMarks} onChange={(e) => updateMark(student.userId, 'graceMarks', e.target.value)} /></TableCell>
+                        <TableCell className="text-center font-bold text-emerald-400">{entry.total.toFixed(2)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>
@@ -388,10 +503,10 @@ export default function FacultyMarksPage() {
       <div className="flex justify-end">
         <Button
           onClick={handleSave}
-          disabled={isSaving || isLoadingGrades || !activeTerm}
+          disabled={isSaving || isLoadingMarks || !activeTerm}
           className="bg-emerald-600 hover:bg-emerald-700 text-white"
         >
-          {isSaving ? "Saving..." : "Save Grades"}
+          {isSaving ? "Saving..." : "Save Marks"}
         </Button>
       </div>
     </div>

@@ -6,21 +6,6 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
-const DEFAULT_GRADE_POINTS: Record<string, number> = {
-  "A+": 4.0,
-  A: 4.0,
-  "A-": 3.67,
-  "B+": 3.33,
-  B: 3.0,
-  "B-": 2.67,
-  "C+": 2.33,
-  C: 2.0,
-  "C-": 1.67,
-  "D+": 1.33,
-  D: 1.0,
-  F: 0,
-};
-
 export async function GET(request: Request) {
   try {
     const sessionUser = await getSessionFromRequest(request);
@@ -41,6 +26,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: "courseId and termId are required" }, { status: 400 });
     }
 
+    // Verify faculty teaches this course
     const course = await prisma.course.findFirst({
       where: {
         id: courseId,
@@ -55,44 +41,44 @@ export async function GET(request: Request) {
           where: { instructorId: sessionUser.id },
         },
       },
-    } as any);
+    });
 
     if (!course) {
       return NextResponse.json({ message: "Course not found" }, { status: 404 });
     }
 
     const sectionNameSet = new Set(
-      (Array.isArray((course as any).sections) ? ((course as any).sections as any[]) : [])
-        .map((section: any) => (section.name as string).trim().toLowerCase())
-        .filter((name: string) => name.length > 0)
+      course.sections
+        .map((section) => section.name.trim().toLowerCase())
+        .filter((name) => name.length > 0)
     );
 
-    const records = await prisma.transcript.findMany({
+    // Fetch enrollments with student marks
+    const enrollments = await prisma.enrollment.findMany({
       where: {
         courseId,
         termId,
-        status: "final",
       },
       include: {
         user: true,
+        studentMark: true,
       },
     });
 
-    const filtered = (records as any[])
-      .filter((record: any) => {
-        const normalizedStudentSection = (record.user?.section ?? "").trim().toLowerCase();
+    const records = enrollments
+      .filter((enrollment) => {
+        const normalizedStudentSection = (enrollment.user?.section ?? "").trim().toLowerCase();
         if (!normalizedStudentSection) {
           return true;
         }
         return sectionNameSet.has(normalizedStudentSection);
       })
-      .map((record: any) => ({
-        userId: record.userId,
-        grade: record.grade,
-        gradePoints: record.gradePoints,
+      .map((enrollment) => ({
+        userId: enrollment.userId,
+        studentMark: enrollment.studentMark,
       }));
 
-    return NextResponse.json({ records: filtered });
+    return NextResponse.json({ records });
   } catch (error) {
     console.error("Faculty marks fetch failed", error);
     return NextResponse.json({ message: "Failed to load gradebook" }, { status: 500 });
@@ -120,6 +106,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "courseId and termId are required" }, { status: 400 });
     }
 
+    // Verify faculty teaches this course
     const course = await prisma.course.findFirst({
       where: {
         id: courseId,
@@ -134,24 +121,20 @@ export async function POST(request: Request) {
           where: { instructorId: sessionUser.id },
         },
       },
-    } as any);
+    });
 
     if (!course) {
       return NextResponse.json({ message: "Course not found" }, { status: 404 });
     }
 
     const sectionNameSet = new Set(
-      (Array.isArray((course as any).sections) ? ((course as any).sections as any[]) : [])
-        .map((section: any) => (section.name as string).trim().toLowerCase())
-        .filter((name: string) => name.length > 0)
+      course.sections
+        .map((section) => section.name.trim().toLowerCase())
+        .filter((name) => name.length > 0)
     );
 
-    const studentIds = entries
-      .filter((entry: any): entry is { userId: string; grade?: string; gradePoints?: number | null } =>
-        Boolean(entry?.userId)
-      )
-      .map((entry: any) => entry.userId);
-
+    // Get enrollments to verify students and get enrollment IDs
+    const studentIds = entries.map((e: any) => e.userId);
     const enrollments = await prisma.enrollment.findMany({
       where: {
         courseId,
@@ -163,49 +146,51 @@ export async function POST(request: Request) {
       },
     });
 
-    const filteredValidStudents = new Set(
-      (enrollments as any[])
-        .filter((enrollment: any) => {
-          const normalizedStudentSection = (enrollment.user?.section ?? "").trim().toLowerCase();
-          if (!normalizedStudentSection) {
-            return true;
-          }
-          return sectionNameSet.has(normalizedStudentSection);
-        })
-        .map((enrollment: any) => enrollment.userId)
-    );
+    const validEnrollments = enrollments.filter((enrollment) => {
+      const normalizedStudentSection = (enrollment.user?.section ?? "").trim().toLowerCase();
+      if (!normalizedStudentSection) {
+        return true;
+      }
+      return sectionNameSet.has(normalizedStudentSection);
+    });
+
+    const enrollmentMap = new Map(validEnrollments.map((e) => [e.userId, e.id]));
 
     const tasks = entries
-      .filter((entry: any): entry is { userId: string; grade: string; gradePoints?: number | null } =>
-        Boolean(entry?.userId) && typeof entry?.grade === "string" && entry.grade.length > 0
-      )
-      .filter((entry: any) => filteredValidStudents.has(entry.userId))
+      .filter((entry: any) => enrollmentMap.has(entry.userId))
       .map((entry: any) => {
-        const gradePoints =
-          typeof entry.gradePoints === "number" && !Number.isNaN(entry.gradePoints)
-            ? entry.gradePoints
-            : DEFAULT_GRADE_POINTS[entry.grade] ?? null;
+        const enrollmentId = enrollmentMap.get(entry.userId)!;
 
-        return prisma.transcript.upsert({
+        return prisma.studentMark.upsert({
           where: {
-            userId_courseId_termId_status: {
-              userId: entry.userId,
-              courseId,
-              termId,
-              status: "final",
-            },
+            enrollmentId,
           },
           update: {
-            grade: entry.grade,
-            gradePoints: gradePoints ?? DEFAULT_GRADE_POINTS[entry.grade] ?? 0,
+            assignment1: entry.assignment1,
+            assignment2: entry.assignment2,
+            quiz1: entry.quiz1,
+            quiz2: entry.quiz2,
+            quiz3: entry.quiz3,
+            quiz4: entry.quiz4,
+            mid1: entry.mid1,
+            mid2: entry.mid2,
+            finalExam: entry.finalExam,
+            graceMarks: entry.graceMarks,
+            total: entry.total,
           },
           create: {
-            userId: entry.userId,
-            courseId,
-            termId,
-            grade: entry.grade,
-            gradePoints: gradePoints ?? DEFAULT_GRADE_POINTS[entry.grade] ?? 0,
-            status: "final",
+            enrollmentId,
+            assignment1: entry.assignment1,
+            assignment2: entry.assignment2,
+            quiz1: entry.quiz1,
+            quiz2: entry.quiz2,
+            quiz3: entry.quiz3,
+            quiz4: entry.quiz4,
+            mid1: entry.mid1,
+            mid2: entry.mid2,
+            finalExam: entry.finalExam,
+            graceMarks: entry.graceMarks,
+            total: entry.total,
           },
         });
       });

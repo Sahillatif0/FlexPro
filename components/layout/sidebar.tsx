@@ -18,15 +18,17 @@ import {
   Settings,
   LogOut,
   Menu,
+  Award,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Attendance', href: '/attendance', icon: CalendarRange },
+  { name: 'Marks', href: '/marks', icon: Award },
   { name: 'Courses', href: '/courses', icon: BookOpen },
   { name: 'Enrollment', href: '/enroll', icon: ClipboardCheck },
   { name: 'Transcript', href: '/transcript', icon: FileText },
-  { name: 'Attendance', href: '/attendance', icon: CalendarRange },
   { name: 'Fees', href: '/fees', icon: Wallet },
   { name: 'Feedback', href: '/feedback', icon: MessageSquare },
   { name: 'Grade Requests', href: '/grade-request', icon: Edit3 },
@@ -55,7 +57,7 @@ export function Sidebar() {
         )}
         onClick={toggleSidebar}
       />
-      
+
       {/* Sidebar */}
       <aside
         className={cn(
@@ -121,7 +123,7 @@ export function Sidebar() {
               const Icon = item.icon;
               const isActive = pathname === item.href;
               const accent = accentGradients[index % accentGradients.length];
-              
+
               return (
                 <Link
                   key={item.name}
