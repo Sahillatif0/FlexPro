@@ -1,3 +1,3 @@
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-export const fetchCache = "force-no-store";
+export const ROUTE_DYNAMIC = "force-dynamic";
+export const ROUTE_REVALIDATE = 0;
+export const ROUTE_FETCH_CACHE = "force-no-store";

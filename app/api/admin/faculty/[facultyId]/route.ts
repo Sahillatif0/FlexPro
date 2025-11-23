@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { adminFacultyUpdateSchema } from "@/lib/validation/admin";
-export { dynamic, revalidate, fetchCache } from "@/lib/route-config";
+import { ROUTE_DYNAMIC, ROUTE_REVALIDATE, ROUTE_FETCH_CACHE } from "@/lib/route-config";
+
+export const dynamic = ROUTE_DYNAMIC;
+export const revalidate = ROUTE_REVALIDATE;
+export const fetchCache = ROUTE_FETCH_CACHE;
 
 export async function GET(request: Request, { params }: { params: { facultyId: string } }) {
   try {
