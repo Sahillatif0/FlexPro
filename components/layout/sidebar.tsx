@@ -153,23 +153,6 @@ export function Sidebar() {
 
           {/* Footer */}
           <div className="space-y-2 border-t border-white/10 px-4 py-5">
-            <Link
-              href="/settings"
-              className={cn(
-                'flex items-center rounded-2xl px-4 py-3 text-sm font-medium text-slate-300/80 transition-all hover:bg-white/5 hover:text-white',
-                sidebarCollapsed && 'justify-center px-0'
-              )}
-            >
-              <span
-                className={cn(
-                  'flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-slate-200',
-                  !sidebarCollapsed && 'mr-3'
-                )}
-              >
-                <Settings className="h-4 w-4" />
-              </span>
-              {!sidebarCollapsed && 'Settings'}
-            </Link>
             <button
               onClick={logout}
               className={cn(

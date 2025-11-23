@@ -337,12 +337,12 @@ export default function TranscriptPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Academic Transcript</h1>
-          <p className="text-gray-400">View your complete academic record and grades</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold text-white sm:text-3xl">Academic Transcript</h1>
+          <p className="text-sm text-gray-400 sm:text-base">View your complete academic record and grades</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 sm:flex-nowrap sm:justify-end">
           <Button asChild className="bg-blue-600 text-white hover:bg-blue-700">
             <Link href="/grade-request">Grade Request</Link>
           </Button>

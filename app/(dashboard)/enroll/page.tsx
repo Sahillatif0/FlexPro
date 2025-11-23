@@ -1,14 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { useAppStore } from '@/store';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Search } from 'lucide-react';
 import { StudentMetricSkeleton } from '@/components/ui/student-skeleton';
 import {
   AlertDialog,
@@ -19,6 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { cn } from '@/lib/utils';
 
 interface AvailableCourse {
   id: string;
@@ -55,9 +56,9 @@ interface ActiveTermInfo {
 export default function EnrollPage() {
   const { user } = useAppStore();
   const { toast } = useToast();
-  const [selectedDepartment, setSelectedDepartment] = useState('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'enrolled' | 'full' | 'restricted'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [courses, setCourses] = useState<AvailableCourse[]>([]);
-  const [departments, setDepartments] = useState<string[]>([]);
   const [summary, setSummary] = useState<EnrollmentSummary | null>(null);
   const [term, setTerm] = useState<ActiveTermInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -66,6 +67,16 @@ export default function EnrollPage() {
   const [error, setError] = useState<string | null>(null);
   const [showLimitDialog, setShowLimitDialog] = useState(false);
   const [limitDialogMessage, setLimitDialogMessage] = useState('');
+
+  const statusFilters = useMemo(
+    () => [
+      { value: 'all', label: 'All' },
+      { value: 'available', label: 'Open Seats' },
+      { value: 'enrolled', label: 'Enrolled' },
+      { value: 'full', label: 'Full' }
+    ] as const,
+    []
+  );
 
   const loadCourses = useCallback(
     async (signal?: AbortSignal) => {
@@ -93,7 +104,6 @@ export default function EnrollPage() {
         };
 
         setCourses(payload.courses);
-        setDepartments(['all', ...payload.departments]);
         setSummary(payload.summary);
         setTerm(payload.term);
         setHasLoaded(true);
@@ -121,11 +131,29 @@ export default function EnrollPage() {
   }, [loadCourses, user]);
 
   const filteredCourses = useMemo(() => {
-    if (selectedDepartment === 'all') {
-      return courses;
-    }
-    return courses.filter((course) => course.department === selectedDepartment);
-  }, [courses, selectedDepartment]);
+    const query = searchTerm.trim().toLowerCase();
+
+    const courseStatus = (course: AvailableCourse): 'available' | 'enrolled' | 'full' | 'restricted' => {
+      if (course.alreadyEnrolled) return 'enrolled';
+      if (!course.matchesStudentSection) return 'restricted';
+      if (!course.available) return 'full';
+      return 'available';
+    };
+
+    const matchesStatus = (course: AvailableCourse) =>
+      statusFilter === 'all' || courseStatus(course) === statusFilter;
+
+    const matchesSearch = (course: AvailableCourse) => {
+      if (!query) return true;
+      return (
+        course.title.toLowerCase().includes(query) ||
+        course.code.toLowerCase().includes(query) ||
+        course.department.toLowerCase().includes(query)
+      );
+    };
+
+    return courses.filter((course) => matchesStatus(course) && matchesSearch(course));
+  }, [courses, searchTerm, statusFilter]);
 
   const handleEnroll = useCallback(
     async (courseId: string) => {
@@ -354,8 +382,8 @@ export default function EnrollPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-white">Course Enrollment</h1>
-        <p className="text-gray-400">Browse and enroll in available courses</p>
+        <h1 className="text-2xl font-bold text-white sm:text-3xl">Course Enrollment</h1>
+        <p className="text-sm text-gray-400 sm:text-base">Browse and enroll in available courses</p>
       </div>
 
       {error ? (
@@ -365,28 +393,50 @@ export default function EnrollPage() {
       ) : null}
 
       <Card className="student-surface border-0 bg-transparent">
-        <CardHeader>
-          <CardTitle className="text-white">Filter Courses</CardTitle>
+        <CardHeader className="px-4 pb-3 pt-6 sm:px-6">
+          <CardTitle className="text-lg text-white sm:text-xl">Filter Courses</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-              <SelectTrigger className="w-48 student-input" disabled={isLoading}>
-                <SelectValue placeholder="Select department" />
-              </SelectTrigger>
-              <SelectContent className="student-popover">
-                {departments.map((dept) => (
-                  <SelectItem key={dept} value={dept} className="text-white">
-                    {dept === 'all' ? 'All Departments' : dept}
-                  </SelectItem>
+        <CardContent className="px-4 pb-6 sm:px-6">
+          <div className="space-y-6 md:grid md:grid-cols-[minmax(0,320px)_minmax(0,1fr)] md:items-start md:gap-6">
+            <div className="space-y-3">
+              <label className="text-xs uppercase tracking-[0.3em] text-slate-400/70">Find a course</label>
+              <div className="group relative w-full">
+                <div className="pointer-events-none absolute -inset-[1px] rounded-[1.05rem] bg-gradient-to-r from-sky-500/25 via-indigo-500/20 to-blue-500/20 opacity-0 blur-[1px] transition-opacity duration-300 group-hover:opacity-100 group-focus-within:opacity-100" />
+                <div className="relative overflow-hidden rounded-[1rem] border border-white/10 bg-[#0b1220]/80 backdrop-blur">
+                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400/70 transition-colors duration-300 group-focus-within:text-blue-200 group-hover:text-blue-200" />
+                  <Input
+                    value={searchTerm}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) => setSearchTerm(event.target.value)}
+                    placeholder="Search by code, title, or department"
+                    className="h-11 w-full rounded-[1rem] border border-transparent bg-transparent pl-12 pr-4 text-sm text-slate-100 placeholder:text-slate-400 focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <label className="text-xs uppercase tracking-[0.3em] text-slate-400/70">Status</label>
+              <div className="flex flex-wrap gap-2">
+                {statusFilters.map((filter) => (
+                  <Button
+                    key={filter.value}
+                    type="button"
+                    size="sm"
+                    onClick={() => setStatusFilter(filter.value)}
+                    className={cn(
+                      'rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition-colors hover:border-blue-500/50 hover:text-white',
+                      statusFilter === filter.value && 'border-blue-500/60 bg-blue-600/20 text-white shadow-[0_12px_35px_-22px_rgba(59,130,246,0.85)]'
+                    )}
+                  >
+                    {filter.label}
+                  </Button>
                 ))}
-              </SelectContent>
-            </Select>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {showMetricSkeletons ? (
           Array.from({ length: 3 }).map((_, index) => <StudentMetricSkeleton key={index} />)
         ) : (
@@ -428,21 +478,24 @@ export default function EnrollPage() {
       </div>
 
       <Card className="student-surface border-0 bg-transparent">
-        <CardHeader>
-          <CardTitle className="text-white">Available Courses</CardTitle>
+        <CardHeader className="px-4 pb-3 pt-6 sm:px-6 sm:pb-4">
+          <CardTitle className="text-lg text-white sm:text-xl">Available Courses</CardTitle>
         </CardHeader>
-        <CardContent>
-          <DataTable
+        <CardContent className="px-2 pb-6 sm:px-6">
+          <div className="-mx-1 sm:mx-0">
+            <DataTable
+            key={`${statusFilter}-${searchTerm}`}
             data={filteredCourses}
             columns={columns}
-            searchKey="title"
+            searchable={false}
             emptyMessage="No courses available for enrollment"
             isLoading={isLoading || !hasLoaded}
             skeletonRows={8}
             hideSearchWhileLoading
             skeletonColumns={columns.length}
             showEmptyState={hasLoaded}
-          />
+            />
+          </div>
         </CardContent>
       </Card>
 

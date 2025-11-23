@@ -191,34 +191,36 @@ export default function AttendancePage() {
 
   return (
     <div className="space-y-6 relative">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Attendance Record</h1>
-          <p className="text-gray-400">Track your class attendance and statistics</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold text-white sm:text-3xl">Attendance Record</h1>
+          <p className="text-sm text-gray-400 sm:text-base">Track your class attendance and statistics</p>
         </div>
-        <ToggleGroup
-          type="single"
-          value={viewMode}
-          onValueChange={(v) => v && setViewMode(v as 'all' | 'course')}
-          variant="outline"
-          size="sm"
-          className="bg-gray-800 border border-gray-700 rounded-md"
-        >
-          <ToggleGroupItem
-            value="all"
-            aria-label="All Entries"
-            className="text-gray-200 data-[state=on]:bg-gray-700"
+        <div className="flex flex-wrap items-center gap-3 sm:flex-nowrap sm:justify-end">
+          <ToggleGroup
+            type="single"
+            value={viewMode}
+            onValueChange={(v) => v && setViewMode(v as 'all' | 'course')}
+            variant="outline"
+            size="sm"
+            className="w-full justify-between rounded-xl border border-gray-700 bg-gray-800 sm:w-auto sm:justify-normal"
           >
-            All Entries
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            value="course"
-            aria-label="By Course"
-            className="text-gray-200 data-[state=on]:bg-gray-700"
-          >
-            By Course
-          </ToggleGroupItem>
-        </ToggleGroup>
+            <ToggleGroupItem
+              value="all"
+              aria-label="All Entries"
+              className="flex-1 text-gray-200 data-[state=on]:bg-gray-700 sm:flex-none"
+            >
+              All Entries
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="course"
+              aria-label="By Course"
+              className="flex-1 text-gray-200 data-[state=on]:bg-gray-700 sm:flex-none"
+            >
+              By Course
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
       </div>
 
       {error ? (

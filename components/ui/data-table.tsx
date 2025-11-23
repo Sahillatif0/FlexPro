@@ -123,8 +123,9 @@ export function DataTable<T extends Record<string, any>>({
       )}
 
       <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur">
-        <Table>
-          <TableHeader>
+        <div className="overflow-x-auto">
+          <Table className="min-w-[640px]">
+            <TableHeader>
             <TableRow className="border-white/10 bg-white/5 text-slate-300/80">
               {columns.map((column) => (
                 <TableHead
@@ -147,8 +148,8 @@ export function DataTable<T extends Record<string, any>>({
               ))}
             </TableRow>
           </TableHeader>
-          <TableBody>
-            {isLoading ? (
+            <TableBody>
+              {isLoading ? (
               Array.from({ length: skeletonRows }).map((_, rowIndex) => {
                 const columnCount = Math.max(skeletonColumns ?? columns.length, 1);
                 return (
@@ -161,7 +162,7 @@ export function DataTable<T extends Record<string, any>>({
                   </TableRow>
                 );
               })
-            ) : paginatedData.length > 0 ? (
+              ) : paginatedData.length > 0 ? (
               paginatedData.map((item: T, index: number) => {
                 const rowKey = (item as any)?.id ?? index;
                 return (
@@ -176,7 +177,7 @@ export function DataTable<T extends Record<string, any>>({
                   </TableRow>
                 );
               })
-            ) : showEmptyState ? (
+              ) : showEmptyState ? (
               <TableRow>
                 <TableCell
                   colSpan={columns.length || skeletonColumns || 1}
@@ -185,9 +186,10 @@ export function DataTable<T extends Record<string, any>>({
                   {emptyMessage}
                 </TableCell>
               </TableRow>
-            ) : null}
-          </TableBody>
-        </Table>
+              ) : null}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       {totalPages > 1 && !isLoading && (
