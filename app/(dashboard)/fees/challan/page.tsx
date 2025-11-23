@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,47 +11,98 @@ import Link from 'next/link';
 
 export default function ChallanPage() {
   const { user } = useAppStore();
+  const [loading, setLoading] = useState(true);
+  const [challanData, setChallanData] = useState<any>(null);
 
-  // Mock data for the current term
-  const challanData = {
-    studentName: `${user?.firstName} ${user?.lastName}`,
-    studentId: user?.studentId,
-    program: user?.program,
-    semester: user?.semester,
-    term: 'Fall 2024',
-    fees: [
-      { description: 'Tuition Fee', amount: 75000 },
-      { description: 'Laboratory Fee', amount: 5000 },
-      { description: 'Library Fee', amount: 2000 },
-      { description: 'Sports Fee', amount: 3000 },
-    ],
-    totalAmount: 85000,
-    dueDate: '2024-12-30',
-    challanNumber: 'FP-2024-001234',
-    bankDetails: {
-      bankName: 'Allied Bank Limited',
-      accountTitle: 'FAST University',
-      accountNumber: '0010-1234567890',
-    },
-  };
+  useEffect(() => {
+    async function fetchChallanData() {
+      if (!user) return;
+      try {
+        const response = await fetch(`/api/fees?userId=${user.id}`);
+        const data = await response.json();
 
-  // Since individual fee items don't have status here, treat all as pending for summary.
-  const totalPaid = 0;
-  const totalPending = challanData.totalAmount;
+        // Find the tuition fee invoice or the most recent pending one
+        const invoice = data.invoices.find((inv: any) => inv.description === 'Tuition Fee' && inv.status === 'pending')
+          || data.invoices[0];
+
+        if (invoice) {
+          setChallanData({
+            studentName: `${user.firstName} ${user.lastName}`,
+            studentId: user.studentId,
+            program: user.program,
+            semester: user.semester,
+            term: invoice.term || 'Current Term',
+            fees: [
+              { description: invoice.description, amount: invoice.amount },
+              // Add other fixed fees if needed, or fetch them
+            ],
+            totalAmount: invoice.amount,
+            dueDate: invoice.dueDate,
+            challanNumber: `FP-${new Date().getFullYear()}-${invoice.id.substring(0, 6).toUpperCase()}`,
+            bankDetails: {
+              bankName: 'Allied Bank Limited',
+              accountTitle: 'FlexPro University',
+              accountNumber: '0010-1234567890',
+            },
+            invoiceId: invoice.id,
+            status: invoice.status,
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch challan data', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchChallanData();
+  }, [user]);
+
+  if (loading) {
+    return <div className="text-white">Loading challan details...</div>;
+  }
+
+  if (!challanData) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Link href="/fees">
+            <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Fees
+            </Button>
+          </Link>
+        </div>
+        <div className="text-white">No pending challan found.</div>
+      </div>
+    );
+  }
+
+  const totalPaid = challanData.status === 'paid' ? challanData.totalAmount : 0;
+  const totalPending = challanData.status === 'pending' ? challanData.totalAmount : 0;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/fees">
-          <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Fees
-          </Button>
-        </Link>
-        <div>
-          <h1 className="text-3xl font-bold text-white">Fee Challan</h1>
-          <p className="text-gray-400">Generate and download your fee payment challan</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Link href="/fees">
+            <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Fees
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-3xl font-bold text-white">Fee Challan</h1>
+            <p className="text-gray-400">Generate and download your fee payment challan</p>
+          </div>
         </div>
+        <PDFButton
+          title={`Fee Challan - ${challanData.term}`}
+          data={challanData}
+          filename={`fee-challan-${challanData.challanNumber}.pdf`}
+          variant="default"
+          className="w-full md:w-auto bg-blue-600 hover:bg-blue-700"
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -60,8 +112,12 @@ export default function ChallanPage() {
             <CardHeader className="border-b border-gray-700">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-white">Payment Challan</CardTitle>
-                <Badge variant="outline" className="border-amber-500 text-amber-400">
-                  Pending
+                <Badge variant="outline" className={
+                  challanData.status === 'paid'
+                    ? "border-emerald-500 text-emerald-400"
+                    : "border-amber-500 text-amber-400"
+                }>
+                  {challanData.status}
                 </Badge>
               </div>
             </CardHeader>
@@ -123,7 +179,7 @@ export default function ChallanPage() {
               <div className="space-y-3">
                 <h3 className="font-semibold text-white text-lg">Fee Breakdown</h3>
                 <div className="bg-gray-700 rounded-lg p-4 space-y-2">
-                  {challanData.fees.map((fee, index) => (
+                  {challanData.fees.map((fee: any, index: number) => (
                     <div key={index} className="flex justify-between text-sm">
                       <span className="text-gray-300">{fee.description}</span>
                       <span className="text-white font-mono">PKR {fee.amount.toLocaleString()}</span>
@@ -167,16 +223,14 @@ export default function ChallanPage() {
               <CardTitle className="text-white">Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <PDFButton
-                title="Fee Challan - Fall 2024"
-                data={challanData}
-                filename={`fee-challan-${challanData.challanNumber}.pdf`}
-                variant="default"
-              />
-              <Button className="w-full bg-emerald-600 hover:bg-emerald-700">
-                <CreditCard className="h-4 w-4 mr-2" />
-                Pay Online
-              </Button>
+              {challanData.status === 'pending' && challanData.totalAmount > 0 && (
+                <Link href={`/fees/payment?invoiceId=${challanData.invoiceId}&amount=${challanData.totalAmount}`}>
+                  <Button className="w-full bg-emerald-600 hover:bg-emerald-700">
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Pay Online
+                  </Button>
+                </Link>
+              )}
               <Button variant="outline" className="w-full border-gray-600 text-gray-300 hover:bg-gray-700">
                 <Hash className="h-4 w-4 mr-2" />
                 Track Payment
@@ -213,7 +267,7 @@ export default function ChallanPage() {
                 <div>
                   <p className="text-amber-400 font-medium text-sm">Payment Reminder</p>
                   <p className="text-amber-300 text-xs">
-                    Late fee charges apply after due date. Pay before Dec 30 to avoid penalties.
+                    Late fee charges apply after due date. Pay before {new Date(challanData.dueDate).toLocaleDateString()} to avoid penalties.
                   </p>
                 </div>
               </div>
