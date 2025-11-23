@@ -1,16 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { Badge } from "@/components/ui/badge";
+import { BookMarked, GraduationCap, ListChecks, RefreshCcw, Users } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { BookMarked, GraduationCap, Plus, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
 
 interface InstructorOption {
   id: string;
@@ -49,122 +52,139 @@ interface CoursesPayload {
   instructors: InstructorOption[];
 }
 
-const departments = [
-  "Computer Science",
-  "Electrical Engineering",
-  "Mathematics",
-  "Management Sciences",
-  "Humanities",
-];
-
 export default function AdminCoursesPage() {
   const { toast } = useToast();
-  const [data, setData] = useState<CoursesPayload | null>(null);
+  const [payload, setPayload] = useState<CoursesPayload | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const [pendingCourseId, setPendingCourseId] = useState<string | null>(null);
-  const [assigningSectionId, setAssigningSectionId] = useState<string | null>(null);
-  const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
   const [addingSectionCourseId, setAddingSectionCourseId] = useState<string | null>(null);
+  const [assigningSectionId, setAssigningSectionId] = useState<string | null>(null);
   const [removingSectionId, setRemovingSectionId] = useState<string | null>(null);
+  const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
   const [sectionDrafts, setSectionDrafts] = useState<Record<string, string>>({});
-
-  const [form, setForm] = useState({
-    code: "",
-    title: "",
-    description: "",
-    creditHours: "3",
-    department: "Computer Science",
-    semester: "1",
-    prerequisite: "",
-    maxCapacity: "40",
-    sections: "",
-  });
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
-    let cancelled = false;
+    let mounted = true;
 
-    async function loadCourses() {
+    async function fetchCourses() {
       setIsLoading(true);
       setError(null);
       try {
         const response = await fetch("/api/admin/courses?limit=100", {
           signal: controller.signal,
         });
+        const result = await response.json().catch(() => ({}));
         if (!response.ok) {
-          const payload = await response.json().catch(() => ({}));
-          throw new Error(payload?.message ?? "Failed to load courses");
+          throw new Error(result?.message ?? "Unable to load courses");
         }
-        const payload: CoursesPayload = await response.json();
-        if (!cancelled) {
-          setData(payload);
+        if (mounted) {
+          setPayload(result);
         }
       } catch (err: any) {
         if (err?.name === "AbortError") {
           return;
         }
-        if (!cancelled) {
+        if (mounted) {
           setError(err?.message ?? "Unexpected error");
         }
       } finally {
-        if (!cancelled) {
+        if (mounted) {
           setIsLoading(false);
         }
       }
     }
 
-    loadCourses();
+    fetchCourses();
+
     return () => {
-      cancelled = true;
+      mounted = false;
       controller.abort();
     };
   }, []);
 
-  const sortedCourses = useMemo(() => {
-    if (!data) {
-      return [];
+  const refreshCourses = async () => {
+    if (isRefreshing) {
+      return;
     }
-    return [...data.courses].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [data]);
-
-  const handleInputChange = (field: keyof typeof form, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    try {
+      setIsRefreshing(true);
+      const response = await fetch("/api/admin/courses?limit=100");
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result?.message ?? "Unable to refresh courses");
+      }
+      setPayload(result);
+      toast({
+        title: "Course list updated",
+        description: "Synced with the latest catalog.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Refresh failed",
+        description: err?.message ?? "Unexpected error",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
-  const resetForm = () => {
-    setForm({
-      code: "",
-      title: "",
-      description: "",
-      creditHours: "3",
-      department: "Computer Science",
-      semester: "1",
-      prerequisite: "",
-      maxCapacity: "40",
-      sections: "",
+  const courses = payload?.courses ?? [];
+  const instructors = payload?.instructors ?? [];
+
+  const sortedCourses = useMemo(() => {
+    return [...courses].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [courses]);
+
+  const filteredCourses = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return sortedCourses;
+    }
+    const term = searchTerm.trim().toLowerCase();
+    return sortedCourses.filter((course) => {
+      const composite = `${course.code} ${course.title} ${course.department}`.toLowerCase();
+      return composite.includes(term);
     });
+  }, [searchTerm, sortedCourses]);
+
+  const selectedCourse = useMemo(() => {
+    if (!selectedCourseId) {
+      return null;
+    }
+    return courses.find((course) => course.id === selectedCourseId) ?? null;
+  }, [courses, selectedCourseId]);
+
+  const handleOpenDetails = (course: CourseRecord) => {
+    setSelectedCourseId(course.id);
+    setIsDetailOpen(true);
   };
 
-  const updateCourseState = (updatedCourse: CourseRecord) => {
-    setData((prev) =>
+  const closeDetails = () => {
+    setIsDetailOpen(false);
+    setSelectedCourseId(null);
+  };
+
+  const updateCourseInState = (updated: CourseRecord) => {
+    setPayload((prev) =>
       prev
         ? {
-          ...prev,
-          courses: prev.courses.map((course) =>
-            course.id === updatedCourse.id ? updatedCourse : course
-          ),
-        }
+            ...prev,
+            courses: prev.courses.map((item) => (item.id === updated.id ? updated : item)),
+          }
         : prev
     );
   };
 
-  const handleToggleStatus = async (course: CourseRecord) => {
+  const handleToggleCourseStatus = async (course: CourseRecord) => {
     if (pendingCourseId) {
       return;
     }
-
     try {
       setPendingCourseId(course.id);
       const response = await fetch(`/api/admin/courses/${course.id}`, {
@@ -173,17 +193,17 @@ export default function AdminCoursesPage() {
         body: JSON.stringify({ isActive: !course.isActive }),
       });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(result?.message ?? "Unable to update course status");
+      if (!response.ok || !result?.course) {
+        throw new Error(result?.message ?? "Unable to update course");
       }
-      updateCourseState(result.course);
+      updateCourseInState(result.course);
       toast({
         title: "Course status updated",
         description: `${course.code} is now ${result.course.isActive ? "active" : "inactive"}.`,
       });
     } catch (err: any) {
       toast({
-        title: "Status update failed",
+        title: "Update failed",
         description: err?.message ?? "Unexpected error",
         variant: "destructive",
       });
@@ -192,7 +212,125 @@ export default function AdminCoursesPage() {
     }
   };
 
-  const handleAssignSectionInstructor = async (
+  const handleDeleteCourse = async (course: CourseRecord) => {
+    if (deletingCourseId) {
+      return;
+    }
+    const confirmed = window.confirm(
+      `Delete ${course.code} · ${course.title}? Students will lose access to this offering.`
+    );
+    if (!confirmed) {
+      return;
+    }
+    try {
+      setDeletingCourseId(course.id);
+      const response = await fetch(`/api/admin/courses/${course.id}`, {
+        method: "DELETE",
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result?.message ?? "Unable to delete course");
+      }
+      setPayload((prev) =>
+        prev
+          ? {
+              ...prev,
+              courses: prev.courses.filter((item) => item.id !== course.id),
+            }
+          : prev
+      );
+      toast({
+        title: "Course deleted",
+        description: `${course.code} removed from catalog.`,
+      });
+      if (selectedCourseId === course.id) {
+        closeDetails();
+      }
+    } catch (err: any) {
+      toast({
+        title: "Deletion failed",
+        description: err?.message ?? "Unexpected error",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingCourseId(null);
+    }
+  };
+
+  const handleSectionDraftChange = (courseId: string, value: string) => {
+    setSectionDrafts((prev) => ({ ...prev, [courseId]: value }));
+  };
+
+  const handleAddSection = async (course: CourseRecord) => {
+    if (addingSectionCourseId) {
+      return;
+    }
+    const draft = sectionDrafts[course.id]?.trim() ?? "";
+    if (!draft) {
+      toast({
+        title: "Section name required",
+        description: "Add a section label before saving.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const exists = course.sections.some(
+      (section) => section.name.toLowerCase() === draft.toLowerCase()
+    );
+    if (exists) {
+      toast({
+        title: "Section already exists",
+        description: `${draft} is already linked to this course.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      setAddingSectionCourseId(course.id);
+      const response = await fetch(`/api/admin/courses/${course.id}/sections`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: draft }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result?.section) {
+        throw new Error(result?.message ?? "Unable to add section");
+      }
+      const newSection: CourseSectionRecord = result.section;
+      setPayload((prev) =>
+        prev
+          ? {
+              ...prev,
+              courses: prev.courses.map((item) =>
+                item.id === course.id
+                  ? {
+                      ...item,
+                      sections: [...item.sections, newSection].sort((a, b) =>
+                        a.name.localeCompare(b.name)
+                      ),
+                    }
+                  : item
+              ),
+            }
+          : prev
+      );
+      setSectionDrafts((prev) => ({ ...prev, [course.id]: "" }));
+      toast({
+        title: "Section added",
+        description: `${draft} now appears under ${course.code}.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Unable to add section",
+        description: err?.message ?? "Unexpected error",
+        variant: "destructive",
+      });
+    } finally {
+      setAddingSectionCourseId(null);
+    }
+  };
+
+  const handleAssignInstructor = async (
     course: CourseRecord,
     section: CourseSectionRecord,
     instructorId: string | null
@@ -200,7 +338,6 @@ export default function AdminCoursesPage() {
     if (assigningSectionId) {
       return;
     }
-
     try {
       setAssigningSectionId(section.id);
       const response = await fetch(`/api/admin/courses/${course.id}/sections/${section.id}`, {
@@ -209,29 +346,27 @@ export default function AdminCoursesPage() {
         body: JSON.stringify({ instructorId }),
       });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
+      if (!response.ok || !result?.section) {
         throw new Error(result?.message ?? "Unable to update section");
       }
-
       const updatedSection: CourseSectionRecord = result.section;
-      setData((prev) =>
+      setPayload((prev) =>
         prev
           ? {
-            ...prev,
-            courses: prev.courses.map((item) =>
-              item.id === course.id
-                ? {
-                  ...item,
-                  sections: item.sections
-                    .map((entry) => (entry.id === section.id ? updatedSection : entry))
-                    .sort((a, b) => a.name.localeCompare(b.name)),
-                }
-                : item
-            ),
-          }
+              ...prev,
+              courses: prev.courses.map((item) =>
+                item.id === course.id
+                  ? {
+                      ...item,
+                      sections: item.sections
+                        .map((entry) => (entry.id === section.id ? updatedSection : entry))
+                        .sort((a, b) => a.name.localeCompare(b.name)),
+                    }
+                  : item
+              ),
+            }
           : prev
       );
-
       toast({
         title: "Section updated",
         description: updatedSection.instructor
@@ -249,93 +384,16 @@ export default function AdminCoursesPage() {
     }
   };
 
-  const handleSectionDraftChange = (courseId: string, value: string) => {
-    setSectionDrafts((prev) => ({ ...prev, [courseId]: value }));
-  };
-
-  const handleAddSection = async (course: CourseRecord) => {
-    if (addingSectionCourseId) {
-      return;
-    }
-
-    const draft = sectionDrafts[course.id]?.trim() ?? "";
-    if (!draft) {
-      toast({
-        title: "Section name required",
-        description: "Provide a section label before adding it.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const duplicate = course.sections.some((section) => section.name.toLowerCase() === draft.toLowerCase());
-    if (duplicate) {
-      toast({
-        title: "Section already exists",
-        description: `${draft} is already linked to this course.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      setAddingSectionCourseId(course.id);
-      const response = await fetch(`/api/admin/courses/${course.id}/sections`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: draft }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(result?.message ?? "Unable to add section");
-      }
-
-      const newSection: CourseSectionRecord | undefined = result.section;
-      if (!newSection || !newSection.id || !newSection.name) {
-        throw new Error("Invalid section response");
-      }
-      setData((prev) =>
-        prev
-          ? {
-            ...prev,
-            courses: prev.courses.map((item) =>
-              item.id === course.id
-                ? {
-                  ...item,
-                  sections: [...item.sections, newSection].sort((a, b) =>
-                    a.name.localeCompare(b.name)
-                  ),
-                }
-                : item
-            ),
-          }
-          : prev
-      );
-      setSectionDrafts((prev) => ({ ...prev, [course.id]: "" }));
-      toast({ title: "Section added", description: `${draft} now appears under ${course.code}.` });
-    } catch (err: any) {
-      toast({
-        title: "Unable to add section",
-        description: err?.message ?? "Unexpected error",
-        variant: "destructive",
-      });
-    } finally {
-      setAddingSectionCourseId(null);
-    }
-  };
-
   const handleRemoveSection = async (course: CourseRecord, section: CourseSectionRecord) => {
     if (removingSectionId) {
       return;
     }
-
     const confirmed = window.confirm(
-      `Remove ${section.name} from ${course.code}? This will detach the section from the course.`
+      `Remove ${section.name} from ${course.code}? This section will no longer appear in the catalog.`
     );
     if (!confirmed) {
       return;
     }
-
     try {
       setRemovingSectionId(section.id);
       const response = await fetch(`/api/admin/courses/${course.id}/sections/${section.id}`, {
@@ -345,26 +403,28 @@ export default function AdminCoursesPage() {
       if (!response.ok) {
         throw new Error(result?.message ?? "Unable to remove section");
       }
-
-      setData((prev) =>
+      setPayload((prev) =>
         prev
           ? {
-            ...prev,
-            courses: prev.courses.map((item) =>
-              item.id === course.id
-                ? {
-                  ...item,
-                  sections: item.sections.filter((entry) => entry.id !== section.id),
-                }
-                : item
-            ),
-          }
+              ...prev,
+              courses: prev.courses.map((item) =>
+                item.id === course.id
+                  ? {
+                      ...item,
+                      sections: item.sections.filter((entry) => entry.id !== section.id),
+                    }
+                  : item
+              ),
+            }
           : prev
       );
-      toast({ title: "Section removed", description: `${section.name} is no longer linked to ${course.code}.` });
+      toast({
+        title: "Section removed",
+        description: `${section.name} detached from ${course.code}.`,
+      });
     } catch (err: any) {
       toast({
-        title: "Unable to remove section",
+        title: "Removal failed",
         description: err?.message ?? "Unexpected error",
         variant: "destructive",
       });
@@ -373,125 +433,69 @@ export default function AdminCoursesPage() {
     }
   };
 
-  const handleDeleteCourse = async (course: CourseRecord) => {
-    if (deletingCourseId) {
-      return;
-    }
+  const activeCount = useMemo(
+    () => sortedCourses.filter((course) => course.isActive).length,
+    [sortedCourses]
+  );
 
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${course.code} · ${course.title}? This action cannot be undone.`
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setDeletingCourseId(course.id);
-      const response = await fetch(`/api/admin/courses/${course.id}`, {
-        method: "DELETE",
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(result?.message ?? "Unable to delete course");
-      }
-      setData((prev) =>
-        prev
-          ? {
-            ...prev,
-            courses: prev.courses.filter((item) => item.id !== course.id),
-          }
-          : prev
-      );
-      toast({ title: "Course deleted", description: `${course.code} removed successfully.` });
-    } catch (err: any) {
-      toast({
-        title: "Deletion failed",
-        description: err?.message ?? "Unexpected error",
-        variant: "destructive",
-      });
-    } finally {
-      setDeletingCourseId(null);
-    }
-  };
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (isSaving) {
-      return;
-    }
-
-    const payload = {
-      code: form.code.trim().toUpperCase(),
-      title: form.title.trim(),
-      description: form.description.trim(),
-      creditHours: Number(form.creditHours) || 0,
-      department: form.department,
-      semester: Number(form.semester) || 1,
-      prerequisite: form.prerequisite.trim() || null,
-      maxCapacity: Number(form.maxCapacity) || 40,
-      sections: form.sections
-        .split(",")
-        .map((value) => value.trim())
-        .filter((value, index, array) => value.length > 0 && array.indexOf(value) === index),
-    };
-
-    if (!payload.code || !payload.title || payload.creditHours <= 0) {
-      toast({
-        title: "Invalid course details",
-        description: "Please provide a course code, title, and positive credit hours.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      setIsSaving(true);
-      const response = await fetch("/api/admin/courses", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result?.message ?? "Unable to create course");
-      }
-
-      toast({
-        title: "Course created",
-        description: `${payload.code} has been added successfully.`,
-      });
-
-      setData((prev) =>
-        prev
-          ? {
-            ...prev,
-            courses: [result.course, ...prev.courses],
-          }
-          : prev
-      );
-
-      resetForm();
-    } catch (err: any) {
-      toast({
-        title: "Unable to create course",
-        description: err?.message ?? "Unexpected error",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
+  const sectionCount = useMemo(
+    () => sortedCourses.reduce((total, course) => total + course.sections.length, 0),
+    [sortedCourses]
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold text-white">Manage Courses</h1>
-        <p className="text-sm text-gray-400">
-          Create new offerings and review existing courses available for enrollment.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-white">Course Catalog</h1>
+          <p className="text-sm text-gray-400">
+            Manage offerings, control publication status, and maintain section assignments.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            className="border-gray-700 text-gray-200 hover:text-white"
+            onClick={refreshCourses}
+            disabled={isRefreshing}
+          >
+            <RefreshCcw className="mr-2 h-4 w-4" />
+            {isRefreshing ? "Refreshing" : "Refresh"}
+          </Button>
+          <Button asChild className="bg-purple-600 text-white hover:bg-purple-700">
+            <Link href="/admin/courses/new">Add Course</Link>
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Card className="border-gray-800 bg-gray-900">
+          <CardContent className="flex items-center gap-3 py-4 text-gray-200">
+            <GraduationCap className="h-10 w-10 rounded-lg bg-purple-600/20 p-2 text-purple-300" />
+            <div>
+              <p className="text-xs uppercase text-gray-400">Total courses</p>
+              <p className="text-xl font-semibold">{sortedCourses.length}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-gray-800 bg-gray-900">
+          <CardContent className="flex items-center gap-3 py-4 text-gray-200">
+            <Users className="h-10 w-10 rounded-lg bg-emerald-600/20 p-2 text-emerald-300" />
+            <div>
+              <p className="text-xs uppercase text-gray-400">Active offerings</p>
+              <p className="text-xl font-semibold">{activeCount}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-gray-800 bg-gray-900">
+          <CardContent className="flex items-center gap-3 py-4 text-gray-200">
+            <ListChecks className="h-10 w-10 rounded-lg bg-blue-600/20 p-2 text-blue-300" />
+            <div>
+              <p className="text-xs uppercase text-gray-400">Sections tracked</p>
+              <p className="text-xl font-semibold">{sectionCount}</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {error ? (
@@ -501,315 +505,240 @@ export default function AdminCoursesPage() {
         </Alert>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[2fr,3fr]">
-        <Card id="new" className="bg-gray-900 border-gray-800">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <BookMarked className="h-5 w-5 text-purple-400" />
-              New Course
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm text-gray-300">Course Code</label>
-                  <Input
-                    value={form.code}
-                    onChange={(event) => handleInputChange("code", event.target.value)}
-                    placeholder="CS-450"
-                    className="bg-gray-800 border-gray-700 text-white"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm text-gray-300">Course Title</label>
-                  <Input
-                    value={form.title}
-                    onChange={(event) => handleInputChange("title", event.target.value)}
-                    placeholder="Advanced Topics in AI"
-                    className="bg-gray-800 border-gray-700 text-white"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm text-gray-300">Description</label>
-                <Textarea
-                  value={form.description}
-                  onChange={(event) => handleInputChange("description", event.target.value)}
-                  placeholder="Describe the course objectives and learning outcomes"
-                  className="bg-gray-800 border-gray-700 text-white"
-                  rows={4}
-                />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm text-gray-300">Credit Hours</label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={form.creditHours}
-                    onChange={(event) => handleInputChange("creditHours", event.target.value)}
-                    className="bg-gray-800 border-gray-700 text-white"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm text-gray-300">Semester</label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="8"
-                    value={form.semester}
-                    onChange={(event) => handleInputChange("semester", event.target.value)}
-                    className="bg-gray-800 border-gray-700 text-white"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm text-gray-300">Department</label>
-                  <Select
-                    value={form.department}
-                    onValueChange={(value) => handleInputChange("department", value)}
-                  >
-                    <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
-                      <SelectValue placeholder="Select department" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-gray-900 border-gray-800">
-                      {departments.map((dept) => (
-                        <SelectItem key={dept} value={dept} className="text-white">
-                          {dept}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm text-gray-300">Capacity</label>
-                  <Input
-                    type="number"
-                    min="10"
-                    value={form.maxCapacity}
-                    onChange={(event) => handleInputChange("maxCapacity", event.target.value)}
-                    className="bg-gray-800 border-gray-700 text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm text-gray-300">Prerequisites</label>
-                <Input
-                  value={form.prerequisite}
-                  onChange={(event) => handleInputChange("prerequisite", event.target.value)}
-                  placeholder="CS-301, MT-205"
-                  className="bg-gray-800 border-gray-700 text-white"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm text-gray-300">Sections</label>
-                <Input
-                  value={form.sections}
-                  onChange={(event) => handleInputChange("sections", event.target.value)}
-                  placeholder="Section A, Section B"
-                  className="bg-gray-800 border-gray-700 text-white"
-                />
-                <p className="text-xs text-gray-500">Use commas to add multiple sections in one go.</p>
-              </div>
-
-              <div className="flex items-center justify-end gap-3">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="text-gray-300 hover:text-white"
-                  onClick={resetForm}
-                  disabled={isSaving}
-                >
-                  Reset
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={isSaving}
-                  className="bg-purple-600 hover:bg-purple-700 text-white"
-                >
-                  {isSaving ? "Saving..." : "Create Course"}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gray-900 border-gray-800">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <GraduationCap className="h-5 w-5 text-purple-400" />
-              Existing Courses
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {isLoading || !data ? (
-              <div className="space-y-3">
-                {Array.from({ length: 6 }).map((_, index) => (
-                  <Skeleton key={index} className="h-20 bg-gray-800" />
-                ))}
-              </div>
-            ) : sortedCourses.length ? (
-              <div className="space-y-3">
-                {sortedCourses.map((course) => (
-                  <div key={course.id} className="rounded-lg bg-gray-800/60 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-white">
-                          {course.code} · {course.title}
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          {course.department} · {course.creditHours} CH
-                        </p>
-                      </div>
-                      <Badge
-                        variant="secondary"
-                        className={course.isActive ? "bg-emerald-600/20 text-emerald-400" : "bg-gray-600/20 text-gray-300"}
-                      >
-                        {course.isActive ? "Active" : "Inactive"}
+      <Card className="border-gray-800 bg-gray-900">
+        <CardHeader className="space-y-4 lg:flex lg:items-center lg:justify-between lg:space-y-0">
+          <CardTitle className="flex items-center gap-2 text-white">
+            <BookMarked className="h-5 w-5 text-purple-400" />
+            Existing Courses
+          </CardTitle>
+          <Input
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search by code, title, or department"
+            className="w-full max-w-xs border-gray-700 bg-gray-800 text-white"
+          />
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {isLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <Skeleton key={index} className="h-20 w-full bg-gray-800" />
+              ))}
+            </div>
+          ) : filteredCourses.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-gray-700 p-10 text-center text-sm text-gray-400">
+              No courses match this filter. Try a different search term.
+            </div>
+          ) : (
+            filteredCourses.map((course) => (
+              <div
+                key={course.id}
+                className="rounded-lg border border-gray-800 bg-gray-950/60 p-4 transition hover:border-purple-600/60"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-white">{course.code}</p>
+                      <Badge variant={course.isActive ? "default" : "secondary"}>
+                        {course.isActive ? "Active" : "Draft"}
                       </Badge>
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-400">
-                      <span>Semester {course.semester}</span>
-                      <span>|</span>
-                      <span>Capacity {course.maxCapacity}</span>
-                    </div>
-                    <div className="mt-3 space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                        Sections
-                      </p>
-                      {course.sections.length ? (
-                        <div className="space-y-2">
-                          {course.sections.map((section) => (
-                            <div
-                              key={section.id}
-                              className="flex flex-wrap items-center gap-2 rounded-md bg-gray-900/60 px-2 py-2 text-xs text-gray-200"
-                            >
-                              <span className="font-medium text-white">{section.name}</span>
-                              <Select
-                                value={section.instructor?.id ?? "__none__"}
-                                onValueChange={(value) =>
-                                  handleAssignSectionInstructor(
-                                    course,
-                                    section,
-                                    value === "__none__" ? null : value
-                                  )
-                                }
-                                disabled={assigningSectionId === section.id}
-                              >
-                                <SelectTrigger className="h-8 w-48 bg-gray-800 border-gray-700 text-white">
-                                  <SelectValue
-                                    placeholder="Assign instructor"
-                                    aria-label={`Assign instructor for ${section.name}`}
-                                  />
-                                </SelectTrigger>
-                                <SelectContent className="bg-gray-900 border-gray-800 max-h-64 overflow-y-auto">
-                                  <SelectItem value="__none__" className="text-gray-400">
-                                    Unassigned
-                                  </SelectItem>
-                                  {data?.instructors.map((instructor) => (
-                                    <SelectItem key={instructor.id} value={instructor.id} className="text-white">
-                                      {instructor.fullName}
-                                      {instructor.employeeId ? ` · ${instructor.employeeId}` : ""}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              {section.instructor ? (
-                                <Badge variant="secondary" className="bg-purple-600/20 text-purple-300">
-                                  {section.instructor.firstName} {section.instructor.lastName}
-                                </Badge>
-                              ) : null}
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-5 w-5 text-gray-400 hover:text-white"
-                                onClick={() => handleRemoveSection(course, section)}
-                                disabled={removingSectionId === section.id}
-                                aria-label={`Remove section ${section.name}`}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-gray-500">No sections configured.</p>
-                      )}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Input
-                          value={sectionDrafts[course.id] ?? ""}
-                          onChange={(event) => handleSectionDraftChange(course.id, event.target.value)}
-                          placeholder="e.g. Section A"
-                          className="bg-gray-800 border-gray-700 text-white max-w-xs"
-                          disabled={addingSectionCourseId === course.id}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              handleAddSection(course);
-                            }
-                          }}
-                        />
-                        <Button
-                          size="sm"
-                          className="bg-purple-600 hover:bg-purple-700 text-white"
-                          onClick={() => handleAddSection(course)}
-                          disabled={addingSectionCourseId === course.id}
-                        >
-                          {addingSectionCourseId === course.id ? "Adding..." : (
-                            <span className="flex items-center gap-1">
-                              <Plus className="h-3 w-3" />
-                              Add Section
-                            </span>
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-gray-700 text-gray-200"
-                        onClick={() => handleToggleStatus(course)}
-                        disabled={pendingCourseId === course.id}
-                      >
-                        {pendingCourseId === course.id
-                          ? "Updating..."
-                          : course.isActive
-                            ? "Mark Inactive"
-                            : "Activate"}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-300 hover:text-red-200"
-                        onClick={() => handleDeleteCourse(course)}
-                        disabled={deletingCourseId === course.id}
-                      >
-                        {deletingCourseId === course.id ? "Deleting..." : "Delete"}
-                      </Button>
-                    </div>
+                    <h2 className="text-lg font-semibold text-gray-100">{course.title}</h2>
+                    <p className="text-xs uppercase tracking-wide text-gray-500">
+                      {course.department} · {course.creditHours} credit hrs · Semester {course.semester}
+                    </p>
                   </div>
-                ))}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-gray-700 text-gray-200 hover:text-white"
+                      onClick={() => handleOpenDetails(course)}
+                    >
+                      View details
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-gray-700 text-gray-200 hover:text-white"
+                      onClick={() => handleToggleCourseStatus(course)}
+                      disabled={pendingCourseId === course.id}
+                    >
+                      {course.isActive ? "Deactivate" : "Publish"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleDeleteCourse(course)}
+                      disabled={deletingCourseId === course.id}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+                <Separator className="my-3 border-gray-800" />
+                <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
+                  <span>{course.sections.length} section(s)</span>
+                  <span>Max capacity: {course.maxCapacity}</span>
+                  <span>
+                    Last updated: {new Date(course.createdAt).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </span>
+                </div>
               </div>
-            ) : (
-              <p className="text-sm text-gray-400">
-                No courses available yet. Create your first course using the form on the left.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Sheet
+        open={isDetailOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeDetails();
+          } else {
+            setIsDetailOpen(true);
+          }
+        }}
+      >
+        <SheetContent side="right" className="w-full overflow-y-auto border-gray-800 bg-gray-950/95 text-gray-100 sm:max-w-xl">
+          {selectedCourse ? (
+            <div className="space-y-6">
+              <SheetHeader>
+                <SheetTitle className="text-white">{selectedCourse.title}</SheetTitle>
+                <SheetDescription className="text-gray-400">
+                  {selectedCourse.code} · {selectedCourse.department}
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="rounded-lg border border-gray-800 bg-gray-900 p-4 text-sm text-gray-300">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <Badge variant={selectedCourse.isActive ? "default" : "secondary"}>
+                    {selectedCourse.isActive ? "Published" : "Draft"}
+                  </Badge>
+                </div>
+                <div className="grid gap-2">
+                  <p>
+                    Credit hours: <span className="text-white">{selectedCourse.creditHours}</span>
+                  </p>
+                  <p>
+                    Semester: <span className="text-white">{selectedCourse.semester}</span>
+                  </p>
+                  <p>
+                    Max capacity: <span className="text-white">{selectedCourse.maxCapacity}</span>
+                  </p>
+                  <p>
+                    Created{" "}
+                    <span className="text-white">
+                      {new Date(selectedCourse.createdAt).toLocaleString()}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-white">
+                    Sections ({selectedCourse.sections.length})
+                  </h3>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="New section label"
+                      value={sectionDrafts[selectedCourse.id] ?? ""}
+                      onChange={(event) =>
+                        handleSectionDraftChange(selectedCourse.id, event.target.value)
+                      }
+                      className="h-9 w-40 border-gray-700 bg-gray-900 text-white"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => handleAddSection(selectedCourse)}
+                      disabled={addingSectionCourseId === selectedCourse.id}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                </div>
+                <ScrollArea className="h-[320px] rounded-md border border-gray-800 bg-gray-900">
+                  <div className="space-y-2 p-3">
+                    {selectedCourse.sections.length === 0 ? (
+                      <div className="rounded-md border border-dashed border-gray-700 p-6 text-center text-xs text-gray-400">
+                        No sections yet. Create one to start assigning instructors.
+                      </div>
+                    ) : (
+                      selectedCourse.sections.map((section) => {
+                        const value = section.instructor ? section.instructor.id : "unassigned";
+                        return (
+                          <div key={section.id} className="rounded-md border border-gray-800 bg-gray-950/70 p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <p className="text-sm font-semibold text-white">{section.name}</p>
+                                <p className="text-xs text-gray-400">
+                                  {section.instructor
+                                    ? `${section.instructor.firstName} ${section.instructor.lastName}${
+                                        section.instructor.employeeId
+                                          ? ` · ${section.instructor.employeeId}`
+                                          : ""
+                                      }`
+                                    : "Not assigned"}
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Select
+                                  value={value}
+                                  onValueChange={(selected) =>
+                                    handleAssignInstructor(
+                                      selectedCourse,
+                                      section,
+                                      selected === "unassigned" ? null : selected
+                                    )
+                                  }
+                                  disabled={assigningSectionId === section.id}
+                                >
+                                  <SelectTrigger className="h-9 w-44 border-gray-700 bg-gray-900 text-white">
+                                    <SelectValue placeholder="Assign instructor" />
+                                  </SelectTrigger>
+                                  <SelectContent className="border-gray-800 bg-gray-950 text-white">
+                                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                                    {instructors.map((option) => (
+                                      <SelectItem key={option.id} value={option.id}>
+                                        {option.fullName}
+                                        {option.employeeId ? ` · ${option.employeeId}` : ""}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-gray-700 text-gray-200 hover:text-white"
+                                  onClick={() => handleRemoveSection(selectedCourse, section)}
+                                  disabled={removingSectionId === section.id}
+                                >
+                                  Remove
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <Skeleton className="h-6 w-2/3 bg-gray-800" />
+              <Skeleton className="h-20 w-full bg-gray-800" />
+              <Skeleton className="h-40 w-full bg-gray-800" />
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -1,14 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { CalendarDays, GraduationCap, ShieldOff, Users } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Users, GraduationCap, Search, ShieldOff } from "lucide-react";
 
 interface StudentRecord {
   id: string;
@@ -30,6 +35,43 @@ interface StudentsPayload {
   students: StudentRecord[];
 }
 
+interface StudentDetailRecord {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  studentId: string;
+  program: string | null;
+  semester: number;
+  section: string | null;
+  cgpa: number | null;
+  phone: string | null;
+  address: string | null;
+  bio: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface StudentDetailResponse {
+  student: StudentDetailRecord;
+}
+
+interface StudentDetailForm {
+  firstName: string;
+  lastName: string;
+  email: string;
+  studentId: string;
+  program: string;
+  semester: string;
+  section: string;
+  cgpa: string;
+  phone: string;
+  address: string;
+  bio: string;
+  isActive: boolean;
+}
+
 export default function AdminStudentsPage() {
   const { toast } = useToast();
   const [data, setData] = useState<StudentsPayload | null>(null);
@@ -37,6 +79,14 @@ export default function AdminStudentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [updatingStudentId, setUpdatingStudentId] = useState<string | null>(null);
+
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<StudentDetailRecord | null>(null);
+  const [detailForm, setDetailForm] = useState<StudentDetailForm | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailSaving, setDetailSaving] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -78,6 +128,73 @@ export default function AdminStudentsPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isDetailOpen || !selectedStudentId) {
+      setDetailError(null);
+      setDetail(null);
+      setDetailForm(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    let cancelled = false;
+
+    async function loadDetail() {
+      setDetailLoading(true);
+      setDetailError(null);
+      try {
+        const response = await fetch(`/api/admin/students/${selectedStudentId}`, {
+          signal: controller.signal,
+        });
+        const payload: StudentDetailResponse = await response.json().catch(() => ({} as StudentDetailResponse));
+        if (!response.ok) {
+          throw new Error((payload as any)?.message ?? "Unable to load student profile");
+        }
+        if (!cancelled) {
+          setDetail(payload.student);
+        }
+      } catch (err: any) {
+        if (err?.name === "AbortError") {
+          return;
+        }
+        if (!cancelled) {
+          setDetailError(err?.message ?? "Unexpected error");
+        }
+      } finally {
+        if (!cancelled) {
+          setDetailLoading(false);
+        }
+      }
+    }
+
+    loadDetail();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [isDetailOpen, selectedStudentId]);
+
+  useEffect(() => {
+    if (!detail) {
+      setDetailForm(null);
+      return;
+    }
+    setDetailForm({
+      firstName: detail.firstName,
+      lastName: detail.lastName,
+      email: detail.email,
+      studentId: detail.studentId,
+      program: detail.program ?? "",
+      semester: String(detail.semester ?? ""),
+      section: detail.section ?? "",
+      cgpa: detail.cgpa !== null && detail.cgpa !== undefined ? String(detail.cgpa) : "",
+      phone: detail.phone ?? "",
+      address: detail.address ?? "",
+      bio: detail.bio ?? "",
+      isActive: detail.isActive,
+    });
+  }, [detail]);
+
   const filteredStudents = useMemo(() => {
     if (!data) {
       return [] as StudentRecord[];
@@ -97,13 +214,13 @@ export default function AdminStudentsPage() {
     });
   }, [data, searchTerm]);
 
-  const updateStudentState = (updated: StudentRecord) => {
+  const updateStudentState = (id: string, updates: Partial<StudentRecord>) => {
     setData((prev) =>
       prev
         ? {
             ...prev,
             students: prev.students.map((student) =>
-              student.id === updated.id ? updated : student
+              student.id === id ? { ...student, ...updates } : student
             ),
           }
         : prev
@@ -126,11 +243,11 @@ export default function AdminStudentsPage() {
       if (!response.ok) {
         throw new Error(result?.message ?? "Unable to update student");
       }
-      const updatedStudent: StudentRecord = {
-        ...student,
-        isActive: result.student.isActive,
-      };
-      updateStudentState(updatedStudent);
+      updateStudentState(student.id, { isActive: result.student.isActive });
+      if (detail && detail.id === student.id) {
+        setDetail({ ...detail, isActive: result.student.isActive });
+        setDetailForm((prev) => (prev ? { ...prev, isActive: result.student.isActive } : prev));
+      }
       toast({
         title: "Student status updated",
         description: `${student.studentId} is now ${result.student.isActive ? "active" : "inactive"}.`,
@@ -146,6 +263,127 @@ export default function AdminStudentsPage() {
     }
   };
 
+  const handleDetailFieldChange = (field: keyof StudentDetailForm, value: string | boolean) => {
+    setDetailForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+
+  const handleSaveDetail = async () => {
+    if (!detail || !detailForm || detailSaving) {
+      return;
+    }
+
+    const payload: Record<string, unknown> = {};
+
+    const trim = (value: string) => value.trim();
+
+    if (trim(detailForm.firstName) && trim(detailForm.firstName) !== detail.firstName) {
+      payload.firstName = trim(detailForm.firstName);
+    }
+    if (trim(detailForm.lastName) && trim(detailForm.lastName) !== detail.lastName) {
+      payload.lastName = trim(detailForm.lastName);
+    }
+    if (trim(detailForm.email) && trim(detailForm.email).toLowerCase() !== detail.email.toLowerCase()) {
+      payload.email = trim(detailForm.email);
+    }
+    if (trim(detailForm.studentId) && trim(detailForm.studentId) !== detail.studentId) {
+      payload.studentId = trim(detailForm.studentId);
+    }
+    if (trim(detailForm.program) !== (detail.program ?? "")) {
+      payload.program = trim(detailForm.program);
+    }
+    if (trim(detailForm.section) !== (detail.section ?? "")) {
+      payload.section = trim(detailForm.section);
+    }
+
+    const semesterValue = Number(detailForm.semester);
+    if (Number.isFinite(semesterValue) && semesterValue !== detail.semester) {
+      payload.semester = semesterValue;
+    }
+
+    const cgpaValue = Number(detailForm.cgpa);
+    if (!Number.isNaN(cgpaValue) && cgpaValue !== (detail.cgpa ?? 0)) {
+      payload.cgpa = cgpaValue;
+    }
+
+    if (trim(detailForm.phone) !== (detail.phone ?? "")) {
+      payload.phone = trim(detailForm.phone);
+    }
+    if (trim(detailForm.address) !== (detail.address ?? "")) {
+      payload.address = trim(detailForm.address);
+    }
+    if (trim(detailForm.bio) !== (detail.bio ?? "")) {
+      payload.bio = trim(detailForm.bio);
+    }
+    if (detailForm.isActive !== detail.isActive) {
+      payload.isActive = detailForm.isActive;
+    }
+
+    if (!Object.keys(payload).length) {
+      toast({
+        title: "No changes detected",
+        description: "Update at least one field before saving.",
+      });
+      return;
+    }
+
+    try {
+      setDetailSaving(true);
+      const response = await fetch(`/api/admin/students/${detail.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result?.message ?? "Unable to update student");
+      }
+
+      const updated = result.student as StudentDetailRecord;
+      setDetail((prev) => (prev ? { ...prev, ...updated } : updated));
+      setDetailForm((prev) =>
+        prev
+          ? {
+              ...prev,
+              firstName: updated.firstName,
+              lastName: updated.lastName,
+              email: updated.email,
+              studentId: updated.studentId,
+              program: updated.program ?? "",
+              section: updated.section ?? "",
+              semester: String(updated.semester),
+              cgpa: updated.cgpa !== null && updated.cgpa !== undefined ? String(updated.cgpa) : "",
+              phone: updated.phone ?? "",
+              address: updated.address ?? "",
+              bio: updated.bio ?? "",
+              isActive: updated.isActive,
+            }
+          : prev
+      );
+      updateStudentState(updated.id, {
+        firstName: updated.firstName,
+        lastName: updated.lastName,
+        email: updated.email,
+        studentId: updated.studentId,
+        program: updated.program ?? (detail?.program ?? ""),
+        semester: updated.semester,
+        cgpa: updated.cgpa ?? detail?.cgpa ?? 0,
+        isActive: updated.isActive,
+      });
+      toast({
+        title: "Student updated",
+        description: `${updated.firstName} ${updated.lastName}'s profile was saved successfully.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Update failed",
+        description: err?.message ?? "Unexpected error",
+        variant: "destructive",
+      });
+    } finally {
+      setDetailSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -155,18 +393,8 @@ export default function AdminStudentsPage() {
             Audit student progress, enrollment status, and outstanding requests for support.
           </p>
         </div>
-        <Button
-          variant="outline"
-          className="text-gray-300 border-gray-700"
-          onClick={() =>
-            toast({
-              title: "Exports coming soon",
-              description: "Bulk data exports for registrar workflows will arrive in a future release.",
-            })
-          }
-        >
-          <Search className="h-4 w-4 mr-2" />
-          Advanced filters
+        <Button asChild className="bg-purple-600 text-white hover:bg-purple-700">
+          <Link href="/admin/students/register">Register Student</Link>
         </Button>
       </div>
 
@@ -243,6 +471,8 @@ export default function AdminStudentsPage() {
                         {student.pendingGradeRequests} grade review
                       </span>
                     ) : null}
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-400">
                     <Button
                       variant="outline"
                       size="sm"
@@ -257,17 +487,15 @@ export default function AdminStudentsPage() {
                         : "Activate"}
                     </Button>
                     <Button
-                      variant="ghost"
+                      variant="secondary"
                       size="sm"
-                      className="text-gray-300 hover:text-white"
+                      className="bg-purple-600/30 text-purple-200 hover:bg-purple-600/40"
                       onClick={() => {
-                        toast({
-                          title: "Student profile",
-                          description: `${student.firstName} ${student.lastName}'s detailed registrar workspace will be available in an upcoming release.`,
-                        });
+                        setSelectedStudentId(student.id);
+                        setIsDetailOpen(true);
                       }}
                     >
-                      View record
+                      View profile
                     </Button>
                   </div>
                 </div>
@@ -284,6 +512,242 @@ export default function AdminStudentsPage() {
           )}
         </CardContent>
       </Card>
+
+      <Sheet
+        open={isDetailOpen}
+        onOpenChange={(open) => {
+          setIsDetailOpen(open);
+          if (!open) {
+            setSelectedStudentId(null);
+          }
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="w-full border-l border-gray-800 bg-gray-950 text-gray-100 sm:max-w-3xl"
+        >
+          {detailLoading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <Skeleton key={index} className="h-16 bg-gray-800" />
+              ))}
+            </div>
+          ) : detailError ? (
+            <div className="flex h-full flex-col items-center justify-center space-y-3 text-center">
+              <Alert variant="destructive" className="max-w-sm bg-red-500/10 text-red-100">
+                <AlertTitle>Unable to load profile</AlertTitle>
+                <AlertDescription>{detailError}</AlertDescription>
+              </Alert>
+              <Button
+                variant="outline"
+                className="border-gray-700 text-gray-200"
+                onClick={() => {
+                  if (selectedStudentId) {
+                    setIsDetailOpen(false);
+                    setTimeout(() => setIsDetailOpen(true), 10);
+                  }
+                }}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : detail && detailForm ? (
+            <div className="flex h-full flex-col gap-4">
+              <SheetHeader className="space-y-1 text-left">
+                <SheetTitle className="text-white">
+                  {detail.firstName} {detail.lastName}
+                </SheetTitle>
+                <SheetDescription className="text-gray-400">
+                  {detail.email}
+                </SheetDescription>
+              </SheetHeader>
+              <ScrollArea className="flex-1 pr-3">
+                <div className="space-y-6 pb-6">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-lg border border-gray-800 bg-gray-900/60 p-4 text-sm text-gray-300">
+                      <p className="text-xs uppercase text-gray-500">Student ID</p>
+                      <p className="font-medium text-white">{detail.studentId}</p>
+                    </div>
+                    <div className="rounded-lg border border-gray-800 bg-gray-900/60 p-4 text-sm text-gray-300">
+                      <p className="text-xs uppercase text-gray-500">Status</p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <Badge
+                          variant="secondary"
+                          className={detail.isActive ? "bg-emerald-600/20 text-emerald-400" : "bg-gray-600/20 text-gray-300"}
+                        >
+                          {detail.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                        <Switch
+                          checked={detailForm.isActive}
+                          onCheckedChange={(value) => handleDetailFieldChange("isActive", value)}
+                          className="data-[state=checked]:bg-purple-600"
+                        />
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-gray-800 bg-gray-900/60 p-4 text-sm text-gray-300">
+                      <p className="text-xs uppercase text-gray-500">Program</p>
+                      <p className="font-medium text-white">{detail.program ?? "Not set"}</p>
+                    </div>
+                    <div className="rounded-lg border border-gray-800 bg-gray-900/60 p-4 text-sm text-gray-300">
+                      <p className="text-xs uppercase text-gray-500">Joined</p>
+                      <p className="font-medium text-white">
+                        <CalendarDays className="mr-1 inline h-4 w-4" />
+                        {new Date(detail.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="text-sm text-gray-300">First name</label>
+                        <Input
+                          value={detailForm.firstName}
+                          onChange={(event) => handleDetailFieldChange("firstName", event.target.value)}
+                          className="bg-gray-800 border-gray-700 text-white"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm text-gray-300">Last name</label>
+                        <Input
+                          value={detailForm.lastName}
+                          onChange={(event) => handleDetailFieldChange("lastName", event.target.value)}
+                          className="bg-gray-800 border-gray-700 text-white"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="text-sm text-gray-300">Email</label>
+                        <Input
+                          type="email"
+                          value={detailForm.email}
+                          onChange={(event) => handleDetailFieldChange("email", event.target.value)}
+                          className="bg-gray-800 border-gray-700 text-white"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm text-gray-300">Student ID</label>
+                        <Input
+                          value={detailForm.studentId}
+                          onChange={(event) => handleDetailFieldChange("studentId", event.target.value)}
+                          className="bg-gray-800 border-gray-700 text-white"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <div className="space-y-2">
+                        <label className="text-sm text-gray-300">Program</label>
+                        <Input
+                          value={detailForm.program}
+                          onChange={(event) => handleDetailFieldChange("program", event.target.value)}
+                          className="bg-gray-800 border-gray-700 text-white"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm text-gray-300">Semester</label>
+                        <Input
+                          type="number"
+                          min="1"
+                          max="12"
+                          value={detailForm.semester}
+                          onChange={(event) => handleDetailFieldChange("semester", event.target.value)}
+                          className="bg-gray-800 border-gray-700 text-white"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm text-gray-300">Section</label>
+                        <Input
+                          value={detailForm.section}
+                          onChange={(event) => handleDetailFieldChange("section", event.target.value)}
+                          className="bg-gray-800 border-gray-700 text-white"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="text-sm text-gray-300">CGPA</label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="4"
+                          value={detailForm.cgpa}
+                          onChange={(event) => handleDetailFieldChange("cgpa", event.target.value)}
+                          className="bg-gray-800 border-gray-700 text-white"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm text-gray-300">Phone</label>
+                        <Input
+                          value={detailForm.phone}
+                          onChange={(event) => handleDetailFieldChange("phone", event.target.value)}
+                          className="bg-gray-800 border-gray-700 text-white"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm text-gray-300">Address</label>
+                      <Textarea
+                        value={detailForm.address}
+                        onChange={(event) => handleDetailFieldChange("address", event.target.value)}
+                        className="bg-gray-800 border-gray-700 text-white"
+                        rows={2}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm text-gray-300">Advisor notes</label>
+                      <Textarea
+                        value={detailForm.bio}
+                        onChange={(event) => handleDetailFieldChange("bio", event.target.value)}
+                        className="bg-gray-800 border-gray-700 text-white"
+                        rows={4}
+                        placeholder="Capture advising notes, strengths, or support needs."
+                      />
+                    </div>
+                  </div>
+                </div>
+              </ScrollArea>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  className="text-gray-300 hover:text-white"
+                  onClick={() => {
+                    setDetailForm({
+                      firstName: detail.firstName,
+                      lastName: detail.lastName,
+                      email: detail.email,
+                      studentId: detail.studentId,
+                      program: detail.program ?? "",
+                      semester: String(detail.semester ?? ""),
+                      section: detail.section ?? "",
+                      cgpa: detail.cgpa !== null && detail.cgpa !== undefined ? String(detail.cgpa) : "",
+                      phone: detail.phone ?? "",
+                      address: detail.address ?? "",
+                      bio: detail.bio ?? "",
+                      isActive: detail.isActive,
+                    });
+                  }}
+                  disabled={detailSaving}
+                >
+                  Reset changes
+                </Button>
+                <Button
+                  onClick={handleSaveDetail}
+                  disabled={detailSaving}
+                  className="bg-purple-600 text-white hover:bg-purple-700"
+                >
+                  {detailSaving ? "Saving..." : "Save changes"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-gray-400">
+              Select a student to view details.
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 const navigation = [
   { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { name: "Courses", href: "/admin/courses", icon: BookMarked },
-  { name: "Add Course", href: "/admin/courses#new", icon: PlusCircle },
+  { name: "Add Course", href: "/admin/courses/new", icon: PlusCircle },
   { name: "Students", href: "/admin/students", icon: Users },
   { name: "Register Student", href: "/admin/students/register", icon: UserPlus },
   { name: "Faculty", href: "/admin/faculty", icon: GraduationCap },
