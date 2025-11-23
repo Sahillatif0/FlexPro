@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useState, useMemo } from 'react';
 import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -28,6 +29,11 @@ interface DataTableProps<T> {
   searchKey?: keyof T;
   pageSize?: number;
   emptyMessage?: string;
+  isLoading?: boolean;
+  skeletonRows?: number;
+  hideSearchWhileLoading?: boolean;
+  skeletonColumns?: number;
+  showEmptyState?: boolean;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -37,6 +43,11 @@ export function DataTable<T extends Record<string, any>>({
   searchKey,
   pageSize = 10,
   emptyMessage = 'No data available',
+  isLoading = false,
+  skeletonRows = 6,
+  hideSearchWhileLoading = false,
+  skeletonColumns,
+  showEmptyState = true,
 }: DataTableProps<T>) {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -92,9 +103,9 @@ export function DataTable<T extends Record<string, any>>({
 
   return (
     <div className="space-y-4">
-      {searchable && searchKey && (
+      {searchable && searchKey && (!hideSearchWhileLoading || !isLoading) && (
         <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400/70" />
           <Input
             placeholder="Search..."
             value={searchQuery}
@@ -102,28 +113,29 @@ export function DataTable<T extends Record<string, any>>({
               setSearchQuery(e.target.value);
               setCurrentPage(1);
             }}
-            className="pl-10 bg-gray-800 border-gray-700 text-white"
+            className="student-input h-11 w-full pl-12 pr-4"
+            disabled={isLoading}
           />
         </div>
       )}
 
-      <div className="border border-gray-700 rounded-lg overflow-hidden">
+      <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur">
         <Table>
           <TableHeader>
-            <TableRow className="border-gray-700 hover:bg-gray-800">
+            <TableRow className="border-white/10 bg-white/5 text-slate-300/80">
               {columns.map((column) => (
                 <TableHead
                   key={String(column.key)}
                   className={cn(
-                    "text-gray-300",
-                    column.sortable && "cursor-pointer hover:text-white"
+                    'text-xs font-semibold uppercase tracking-[0.25em] text-slate-400/70',
+                    column.sortable && 'cursor-pointer hover:text-white'
                   )}
                   onClick={column.sortable ? () => handleSort(String(column.key)) : undefined}
                 >
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center gap-2">
                     <span>{column.title}</span>
                     {column.sortable && sortConfig?.key === column.key && (
-                      <span className="text-xs">
+                      <span className="text-xs font-medium text-white">
                         {sortConfig.direction === 'asc' ? '↑' : '↓'}
                       </span>
                     )}
@@ -133,13 +145,26 @@ export function DataTable<T extends Record<string, any>>({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedData.length > 0 ? (
+            {isLoading ? (
+              Array.from({ length: skeletonRows }).map((_, rowIndex) => {
+                const columnCount = Math.max(skeletonColumns ?? columns.length, 1);
+                return (
+                  <TableRow key={`skeleton-${rowIndex}`} className="border-white/10">
+                    {Array.from({ length: columnCount }).map((__, columnIndex) => (
+                      <TableCell key={`skeleton-cell-${rowIndex}-${columnIndex}`} className="py-4">
+                        <Skeleton className="h-4 w-full max-w-[220px] rounded-full bg-white/10" />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                );
+              })
+            ) : paginatedData.length > 0 ? (
               paginatedData.map((item: T, index: number) => {
                 const rowKey = (item as any)?.id ?? index;
                 return (
-                  <TableRow key={rowKey} className="border-gray-700 hover:bg-gray-800">
+                  <TableRow key={rowKey} className="border-white/10 text-slate-200 hover:bg-white/5">
                     {columns.map((column) => (
-                      <TableCell key={String(column.key)} className="text-gray-300">
+                      <TableCell key={String(column.key)} className="py-4 text-sm text-slate-200/85">
                         {column.render
                           ? column.render(item[column.key as keyof T], item)
                           : String(item[column.key as keyof T] || '')}
@@ -148,23 +173,23 @@ export function DataTable<T extends Record<string, any>>({
                   </TableRow>
                 );
               })
-            ) : (
+            ) : showEmptyState ? (
               <TableRow>
                 <TableCell
-                  colSpan={columns.length}
-                  className="text-center py-8 text-gray-500"
+                  colSpan={columns.length || skeletonColumns || 1}
+                  className="py-10 text-center text-sm text-slate-400/70"
                 >
                   {emptyMessage}
                 </TableCell>
               </TableRow>
-            )}
+            ) : null}
           </TableBody>
         </Table>
       </div>
 
-      {totalPages > 1 && (
+      {totalPages > 1 && !isLoading && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-slate-400/75">
             Showing {(currentPage - 1) * pageSize + 1} to{' '}
             {Math.min(currentPage * pageSize, sortedData.length)} of{' '}
             {sortedData.length} results
@@ -175,11 +200,11 @@ export function DataTable<T extends Record<string, any>>({
               size="sm"
               onClick={() => setCurrentPage(currentPage - 1)}
               disabled={currentPage === 1}
-              className="border-gray-700 text-gray-300 hover:bg-gray-800"
+              className="rounded-xl border-white/10 text-slate-200 hover:bg-white/10"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-sm text-gray-400">
+            <span className="text-sm text-slate-400/75">
               {currentPage} of {totalPages}
             </span>
             <Button
@@ -187,7 +212,7 @@ export function DataTable<T extends Record<string, any>>({
               size="sm"
               onClick={() => setCurrentPage(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="border-gray-700 text-gray-300 hover:bg-gray-800"
+              className="rounded-xl border-white/10 text-slate-200 hover:bg-white/10"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>

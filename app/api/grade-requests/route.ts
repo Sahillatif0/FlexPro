@@ -93,9 +93,15 @@ export async function GET(request: Request) {
       };
     });
 
-    const courseOptions = Array.from(courseMap.values()).sort((a, b) =>
-      a.courseCode.localeCompare(b.courseCode)
-    );
+    const courseOptions = enrollments
+      .filter((enrollment) => enrollment.status !== 'dropped')
+      .map((enrollment) => ({
+        courseCode: enrollment.course.code,
+        courseName: enrollment.course.title,
+        termId: enrollment.termId,
+        termName: enrollment.term?.name ?? 'Term',
+      }))
+      .sort((a, b) => a.courseCode.localeCompare(b.courseCode));
 
     const termOptions = terms.map((term) => ({
       id: term.id,

@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useAppStore } from '@/store';
 import { useToast } from '@/hooks/use-toast';
 import { Star, MessageSquare, Send } from 'lucide-react';
+import { StudentMetricSkeleton } from '@/components/ui/student-skeleton';
 
 interface PendingFeedbackItem {
   courseId: string;
@@ -67,11 +68,13 @@ export default function FeedbackPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   const fetchFeedback = useCallback(
     async (signal?: AbortSignal) => {
       if (!user) return;
       setIsLoading(true);
+      setHasLoaded(false);
       setError(null);
 
       try {
@@ -97,6 +100,7 @@ export default function FeedbackPage() {
         setPendingFeedback(payload.pendingFeedback);
         setSubmittedFeedback(payload.submittedFeedback);
         setSummary(payload.summary);
+        setHasLoaded(true);
       } catch (err: any) {
         if (err.name === 'AbortError') return;
         console.error('Feedback fetch error', err);
@@ -105,6 +109,7 @@ export default function FeedbackPage() {
           title: 'Unable to load feedback',
           description: err.message || 'Please try again later.',
         });
+        setHasLoaded(true);
       } finally {
         if (signal?.aborted) {
           return;
@@ -289,6 +294,10 @@ export default function FeedbackPage() {
     return <div className="text-gray-300">Sign in to submit course feedback.</div>;
   }
 
+  const showSkeletons = isLoading && !hasLoaded;
+  const pendingColumnCount = pendingColumns.length;
+  const submittedColumnCount = submittedColumns.length;
+
   return (
     <div className="space-y-6">
       <div>
@@ -303,32 +312,40 @@ export default function FeedbackPage() {
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-gray-800 border-gray-700">
-          <CardContent className="p-6 text-center">
-            <p className="text-gray-400 text-sm">Pending Feedback</p>
-            <p className="text-2xl font-bold text-amber-400">
-              {summary?.pendingCount ?? 0}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="bg-gray-800 border-gray-700">
-          <CardContent className="p-6 text-center">
-            <p className="text-gray-400 text-sm">Submitted</p>
-            <p className="text-2xl font-bold text-emerald-400">
-              {summary?.submittedCount ?? 0}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="bg-gray-800 border-gray-700">
-          <CardContent className="p-6 text-center">
-            <p className="text-gray-400 text-sm">Average Rating</p>
-            <p className="text-2xl font-bold text-white">
-              {summary?.averageRating !== null
-                ? summary?.averageRating.toFixed(1)
-                : 'N/A'}
-            </p>
-          </CardContent>
-        </Card>
+        {showSkeletons
+          ? Array.from({ length: 3 }).map((_, index) => (
+              <StudentMetricSkeleton key={index} />
+            ))
+          : (
+              <>
+                <Card className="bg-gray-800 border-gray-700">
+                  <CardContent className="p-6 text-center">
+                    <p className="text-gray-400 text-sm">Pending Feedback</p>
+                    <p className="text-2xl font-bold text-amber-400">
+                      {summary?.pendingCount ?? 0}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gray-800 border-gray-700">
+                  <CardContent className="p-6 text-center">
+                    <p className="text-gray-400 text-sm">Submitted</p>
+                    <p className="text-2xl font-bold text-emerald-400">
+                      {summary?.submittedCount ?? 0}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gray-800 border-gray-700">
+                  <CardContent className="p-6 text-center">
+                    <p className="text-gray-400 text-sm">Average Rating</p>
+                    <p className="text-2xl font-bold text-white">
+                      {summary?.averageRating !== null
+                        ? summary?.averageRating.toFixed(1)
+                        : 'N/A'}
+                    </p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
       </div>
 
       <Card className="bg-gray-800 border-gray-700">
@@ -336,16 +353,16 @@ export default function FeedbackPage() {
           <CardTitle className="text-white">Pending Feedback</CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <p className="text-sm text-gray-400">Loading feedback...</p>
-          ) : (
-            <DataTable
-              data={pendingFeedback}
-              columns={pendingColumns}
-              searchKey="title"
-              emptyMessage="No pending feedback"
-            />
-          )}
+          <DataTable
+            data={pendingFeedback}
+            columns={pendingColumns}
+            searchKey="title"
+            emptyMessage="No pending feedback"
+            isLoading={isLoading}
+            hideSearchWhileLoading
+            skeletonColumns={pendingColumnCount}
+            showEmptyState={hasLoaded}
+          />
         </CardContent>
       </Card>
 
@@ -354,21 +371,21 @@ export default function FeedbackPage() {
           <CardTitle className="text-white">Submitted Feedback</CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <p className="text-sm text-gray-400">Loading feedback...</p>
-          ) : (
-            <DataTable
-              data={submittedFeedback}
-              columns={submittedColumns}
-              searchKey="title"
-              emptyMessage="No feedback submitted yet"
-            />
-          )}
+          <DataTable
+            data={submittedFeedback}
+            columns={submittedColumns}
+            searchKey="title"
+            emptyMessage="No feedback submitted yet"
+            isLoading={isLoading}
+            hideSearchWhileLoading
+            skeletonColumns={submittedColumnCount}
+            showEmptyState={hasLoaded}
+          />
         </CardContent>
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="bg-gray-800 border-gray-700">
+        <DialogContent className="student-popover">
           <DialogHeader>
             <DialogTitle className="text-white">Course Feedback</DialogTitle>
           </DialogHeader>

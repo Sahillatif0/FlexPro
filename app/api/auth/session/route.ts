@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { AUTH_COOKIE_NAME, getSessionFromToken } from '@/lib/auth';
+import { getSessionFromRequest } from '@/lib/auth';
 
-export async function GET() {
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
+export async function GET(request: Request) {
   try {
-    const token = cookies().get(AUTH_COOKIE_NAME)?.value;
-    const user = await getSessionFromToken(token);
+    const user = await getSessionFromRequest(request);
 
     if (!user) {
       return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });

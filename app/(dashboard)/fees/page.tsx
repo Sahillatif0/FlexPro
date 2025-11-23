@@ -10,7 +10,7 @@ import { Wallet, CreditCard, DollarSign, Calendar } from 'lucide-react';
 import Link from 'next/link';
 import { useAppStore } from '@/store';
 import { useToast } from '@/hooks/use-toast';
-import { Skeleton } from '@/components/ui/skeleton';
+import { StudentMetricSkeleton } from '@/components/ui/student-skeleton';
 
 interface FeeInvoice {
   id: string;
@@ -36,6 +36,7 @@ export default function FeesPage() {
   const [invoices, setInvoices] = useState<FeeInvoice[]>([]);
   const [summary, setSummary] = useState<FeeSummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,6 +47,7 @@ export default function FeesPage() {
     async function loadFees() {
       if(!user) return;
       setIsLoading(true);
+      setHasLoaded(false);
       setError(null);
 
       try {
@@ -64,8 +66,11 @@ export default function FeesPage() {
           summary: FeeSummary;
         };
 
+        if (controller.signal.aborted) return;
+
         setInvoices(payload.invoices);
         setSummary(payload.summary);
+        setHasLoaded(true);
       } catch (err: any) {
         if (err.name === 'AbortError') return;
         console.error('Fees fetch error', err);
@@ -74,7 +79,9 @@ export default function FeesPage() {
           title: 'Unable to load fees',
           description: err.message || 'Please try again later.',
         });
+        setHasLoaded(true);
       } finally {
+        if (controller.signal.aborted) return;
         setIsLoading(false);
       }
     }
@@ -172,6 +179,8 @@ export default function FeesPage() {
   const nextDueDate = summary?.nextDueDate
     ? new Date(summary.nextDueDate).toLocaleDateString()
     : 'No upcoming dues';
+  const showSkeletons = isLoading && !hasLoaded;
+  const columnCount = columns.length;
 
   return (
     <div className="space-y-6">
@@ -201,54 +210,47 @@ export default function FeesPage() {
 
       {/* Fee Summary */}
       <div className="grid gap-4 md:grid-cols-3">
-        {isLoading && !summary ? (
-          Array.from({ length: 3 }).map((_, index) => (
-            <Card key={index} className="bg-gray-800 border-gray-700">
-              <CardContent className="p-6">
-                <div className="space-y-3">
-                  <Skeleton className="h-4 w-24 bg-gray-700" />
-                  <Skeleton className="h-6 w-32 bg-gray-700" />
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        ) : (
-          <>
-            <Card className="bg-gray-800 border-gray-700">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-400 text-sm">Total Paid</p>
-                    <p className="text-2xl font-bold text-emerald-400">PKR {totalPaid.toLocaleString()}</p>
-                  </div>
-                  <DollarSign className="h-8 w-8 text-emerald-500" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gray-800 border-gray-700">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-400 text-sm">Total Pending</p>
-                    <p className="text-2xl font-bold text-amber-400">PKR {totalPending.toLocaleString()}</p>
-                  </div>
-                  <Wallet className="h-8 w-8 text-amber-500" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gray-800 border-gray-700">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-400 text-sm">Next Due Date</p>
-                    <p className="text-2xl font-bold text-white">{nextDueDate}</p>
-                  </div>
-                  <Calendar className="h-8 w-8 text-blue-500" />
-                </div>
-              </CardContent>
-            </Card>
-          </>
-        )}
+        {showSkeletons
+          ? Array.from({ length: 3 }).map((_, index) => (
+              <StudentMetricSkeleton key={index} />
+            ))
+          : (
+              <>
+                <Card className="bg-gray-800 border-gray-700">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-gray-400 text-sm">Total Paid</p>
+                        <p className="text-2xl font-bold text-emerald-400">PKR {totalPaid.toLocaleString()}</p>
+                      </div>
+                      <DollarSign className="h-8 w-8 text-emerald-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gray-800 border-gray-700">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-gray-400 text-sm">Total Pending</p>
+                        <p className="text-2xl font-bold text-amber-400">PKR {totalPending.toLocaleString()}</p>
+                      </div>
+                      <Wallet className="h-8 w-8 text-amber-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gray-800 border-gray-700">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-gray-400 text-sm">Next Due Date</p>
+                        <p className="text-2xl font-bold text-white">{nextDueDate}</p>
+                      </div>
+                      <Calendar className="h-8 w-8 text-blue-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
       </div>
 
       {/* Fee Invoices Table */}
@@ -257,25 +259,16 @@ export default function FeesPage() {
           <CardTitle className="text-white">Fee Details</CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 6 }).map((_, index) => (
-                <div key={index} className="flex items-center gap-4">
-                  <Skeleton className="h-4 w-48 bg-gray-700" />
-                  <Skeleton className="h-4 w-24 bg-gray-700" />
-                  <Skeleton className="h-4 w-32 bg-gray-700" />
-                  <Skeleton className="h-8 w-20 bg-gray-700" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <DataTable
-              data={invoices}
-              columns={columns}
-              searchKey="description"
-              emptyMessage="No fee records found"
-            />
-          )}
+          <DataTable
+            data={invoices}
+            columns={columns}
+            searchKey="description"
+            emptyMessage="No fee records found"
+            isLoading={isLoading}
+            hideSearchWhileLoading
+            skeletonColumns={columnCount}
+            showEmptyState={hasLoaded}
+          />
         </CardContent>
       </Card>
     </div>

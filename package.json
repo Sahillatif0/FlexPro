@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "prisma generate",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -12,7 +13,7 @@
     "db:seed": "tsx prisma/seed.ts"
   },
   "prisma": {
-  "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -32,7 +33,6 @@
     "@radix-ui/react-menubar": "^1.1.1",
     "@radix-ui/react-navigation-menu": "^1.2.0",
     "@radix-ui/react-popover": "^1.1.1",
-    "@radix-ui/react-progress": "^1.1.0",
     "@radix-ui/react-radio-group": "^1.2.0",
     "@radix-ui/react-scroll-area": "^1.1.0",
     "@radix-ui/react-select": "^2.1.1",
@@ -61,11 +61,11 @@
     "eslint": "8.49.0",
     "eslint-config-next": "13.5.1",
     "input-otp": "^1.2.4",
-    "jspdf": "^2.5.1",
+    "jspdf": "^3.0.4",
     "lucide-react": "^0.446.0",
-    "next": "13.5.1",
+    "next": "^16.0.3",
     "next-themes": "^0.3.0",
-    "postcss": "8.4.30",
+    "postcss": "^8.5.6",
     "react": "18.2.0",
     "react-day-picker": "^8.10.1",
     "react-dom": "18.2.0",

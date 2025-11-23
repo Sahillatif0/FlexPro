@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
 const CREDIT_LIMIT = 21;
 
 export async function GET(request: Request) {
@@ -68,10 +72,10 @@ export async function GET(request: Request) {
 
       const courseSections = Array.isArray(course.sections)
         ? course.sections.map((section: any) => ({
-            id: section.id as string,
-            name: section.name as string,
-            normalizedName: (section.name as string).trim().toLowerCase(),
-          }))
+          id: section.id as string,
+          name: section.name as string,
+          normalizedName: (section.name as string).trim().toLowerCase(),
+        }))
         : [];
 
       const hasDefinedSections = courseSections.length > 0;
@@ -258,6 +262,62 @@ export async function POST(request: Request) {
     console.error('Enrollment POST API error', error);
     return NextResponse.json(
       { message: 'Failed to enroll in course' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const body = await request.json();
+    const { userId, courseId } = body as { userId?: string; courseId?: string };
+
+    if (!userId || !courseId) {
+      return NextResponse.json(
+        { message: 'userId and courseId are required' },
+        { status: 400 }
+      );
+    }
+
+    const activeTerm = await prisma.term.findFirst({ where: { isActive: true } });
+    if (!activeTerm) {
+      return NextResponse.json(
+        { message: 'No active term configured' },
+        { status: 404 }
+      );
+    }
+
+    const enrollment = await prisma.enrollment.findUnique({
+      where: {
+        userId_courseId_termId: {
+          userId,
+          courseId,
+          termId: activeTerm.id,
+        },
+      },
+    });
+
+    if (!enrollment) {
+      return NextResponse.json(
+        { message: 'Enrollment not found' },
+        { status: 404 }
+      );
+    }
+
+    await prisma.enrollment.delete({
+      where: {
+        id: enrollment.id,
+      },
+    });
+
+    return NextResponse.json(
+      { message: 'Course dropped successfully' },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error('Enrollment DELETE API error', error);
+    return NextResponse.json(
+      { message: 'Failed to drop course' },
       { status: 500 }
     );
   }

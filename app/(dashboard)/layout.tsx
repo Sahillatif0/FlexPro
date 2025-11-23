@@ -106,12 +106,17 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen bg-gray-950">
+    <div className="relative flex h-screen overflow-hidden bg-[#040712] text-slate-100">
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
+        <div className="student-glow left-[-18rem] top-[-6rem] h-96 w-96 bg-blue-500/35"></div>
+        <div className="student-glow right-[-14rem] top-[20%] h-[28rem] w-[28rem] bg-emerald-500/25"></div>
+        <div className="student-glow left-[30%] bottom-[-18rem] h-[26rem] w-[26rem] bg-purple-500/20"></div>
+      </div>
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="relative flex-1 flex flex-col overflow-hidden">
         <Topbar />
-        <main className="flex-1 overflow-y-auto p-6">
-          <div className="animate-fade-in">
+        <main className="student-portal relative flex-1 overflow-y-auto px-4 pb-10 pt-6 sm:px-8">
+          <div className="mx-auto w-full max-w-7xl space-y-6 animate-fade-in">
             {children}
           </div>
         </main>

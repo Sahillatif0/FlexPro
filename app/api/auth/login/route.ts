@@ -4,6 +4,10 @@ import { prisma } from '@/lib/prisma';
 import { loginSchema } from '@/lib/validation/auth';
 import { AUTH_COOKIE_NAME, AUTH_TOKEN_MAX_AGE, signAuthToken, toPublicUser } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -17,7 +21,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { identifier, password } = parsed.data;
+    const { identifier, password, rememberMe } = parsed.data;
     const normalizedIdentifier = identifier.trim();
 
     const user = await prisma.user.findFirst({
@@ -52,7 +56,9 @@ export async function POST(request: Request) {
     }
 
     const sanitizedUser = toPublicUser(user);
-    const token = signAuthToken(sanitizedUser.id);
+    // 7 days if rememberMe is true, otherwise 1 day
+    const tokenMaxAge = rememberMe ? 60 * 60 * 24 * 7 : 60 * 60 * 24;
+    const token = signAuthToken(sanitizedUser.id, tokenMaxAge);
 
     const response = NextResponse.json(
       {
@@ -69,7 +75,7 @@ export async function POST(request: Request) {
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
       path: '/',
-      maxAge: AUTH_TOKEN_MAX_AGE,
+      maxAge: rememberMe ? 60 * 60 * 24 * 7 : 60 * 60 * 24,
     });
 
     return response;
