@@ -8,7 +8,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAppStore } from '@/store';
 import { useToast } from '@/hooks/use-toast';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface AvailableCourse {
   id: string;
@@ -53,6 +62,8 @@ export default function EnrollPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [enrollingCourse, setEnrollingCourse] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showLimitDialog, setShowLimitDialog] = useState(false);
+  const [limitDialogMessage, setLimitDialogMessage] = useState('');
 
   const loadCourses = useCallback(
     async (signal?: AbortSignal) => {
@@ -127,6 +138,13 @@ export default function EnrollPage() {
 
         if (!response.ok) {
           const result = await response.json().catch(() => ({}));
+
+          if (response.status === 409 && (result?.message?.includes('credit hour limit') || result?.message?.includes('capacity'))) {
+            setLimitDialogMessage(result.message);
+            setShowLimitDialog(true);
+            return;
+          }
+
           throw new Error(result?.message || 'Enrollment failed');
         }
 
@@ -140,6 +158,44 @@ export default function EnrollPage() {
         toast({
           title: 'Unable to enroll',
           description: err.message || 'Please try again later.',
+        });
+      } finally {
+        setEnrollingCourse(null);
+      }
+    },
+    [loadCourses, toast, user]
+  );
+
+  const handleDrop = useCallback(
+    async (courseId: string) => {
+      if (!user) return;
+      setEnrollingCourse(courseId);
+
+      try {
+        const response = await fetch('/api/enroll', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId: user.id, courseId }),
+        });
+
+        if (!response.ok) {
+          const result = await response.json().catch(() => ({}));
+          throw new Error(result?.message || 'Failed to drop course');
+        }
+
+        toast({
+          title: 'Course dropped',
+          description: 'You have successfully dropped the course.',
+        });
+        await loadCourses();
+      } catch (err: any) {
+        console.error('Drop error', err);
+        toast({
+          title: 'Unable to drop course',
+          description: err.message || 'Please try again later.',
+          variant: 'destructive',
         });
       } finally {
         setEnrollingCourse(null);
@@ -221,10 +277,10 @@ export default function EnrollPage() {
             const label = item.alreadyEnrolled
               ? 'Enrolled'
               : !item.matchesStudentSection
-              ? 'Section Restricted'
-              : item.available
-              ? 'Available'
-              : 'Full';
+                ? 'Section Restricted'
+                : item.available
+                  ? 'Available'
+                  : 'Full';
 
             const variant = label === 'Available' ? 'default' : item.alreadyEnrolled ? 'secondary' : 'destructive';
             const className = label === 'Available' ? 'bg-emerald-600' : label === 'Enrolled' ? 'bg-blue-600/30 text-blue-200' : '';
@@ -240,24 +296,40 @@ export default function EnrollPage() {
       {
         key: 'actions',
         title: 'Actions',
-        render: (_: unknown, item: AvailableCourse) => (
-          <Button
-            size="sm"
-            disabled={!item.available || enrollingCourse === item.id || !item.matchesStudentSection}
-            className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
-            onClick={() => handleEnroll(item.id)}
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            {!item.matchesStudentSection
-              ? 'Section Locked'
-              : enrollingCourse === item.id
-              ? 'Enrolling...'
-              : 'Enroll'}
-          </Button>
-        ),
+        render: (_: unknown, item: AvailableCourse) => {
+          if (item.alreadyEnrolled) {
+            return (
+              <Button
+                size="sm"
+                disabled={enrollingCourse === item.id}
+                variant="destructive"
+                onClick={() => handleDrop(item.id)}
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                {enrollingCourse === item.id ? 'Dropping...' : 'Drop'}
+              </Button>
+            );
+          }
+
+          return (
+            <Button
+              size="sm"
+              disabled={!item.available || enrollingCourse === item.id || !item.matchesStudentSection}
+              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
+              onClick={() => handleEnroll(item.id)}
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              {!item.matchesStudentSection
+                ? 'Section Locked'
+                : enrollingCourse === item.id
+                  ? 'Enrolling...'
+                  : 'Enroll'}
+            </Button>
+          );
+        },
       },
     ],
-    [enrollingCourse, handleEnroll]
+    [enrollingCourse, handleEnroll, handleDrop]
   );
 
   if (!user) {
@@ -266,10 +338,10 @@ export default function EnrollPage() {
 
   const registrationDeadline = term?.registrationEndsOn
     ? new Date(term.registrationEndsOn).toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
     : null;
 
   return (
@@ -365,6 +437,25 @@ export default function EnrollPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={showLimitDialog} onOpenChange={setShowLimitDialog}>
+        <AlertDialogContent className="bg-gray-800 border-gray-700 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Registration Limit Reached</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">
+              {limitDialogMessage}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => setShowLimitDialog(false)}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Understood
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
