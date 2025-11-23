@@ -6,7 +6,37 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PDFButton } from '@/components/ui/pdf-button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Award, TrendingUp, BookOpen, Calendar } from 'lucide-react';
+import {
+  Award,
+  TrendingUp,
+  BookOpen,
+  Calendar,
+  BarChart3,
+  LineChart as LineChartIcon,
+  PieChart as PieChartIcon,
+  Sigma,
+} from 'lucide-react';
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+} from '@/components/ui/chart';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  AreaChart,
+  Area,
+} from 'recharts';
 import { useAppStore } from '@/store';
 import { useToast } from '@/hooks/use-toast';
 import { StudentCardSkeleton, StudentMetricSkeleton } from '@/components/ui/student-skeleton';
@@ -47,6 +77,7 @@ export default function TranscriptPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -108,6 +139,121 @@ export default function TranscriptPage() {
     return records.filter((record) => record.term === selectedTerm);
   }, [records, selectedTerm]);
 
+  const termOrder = useMemo(() => {
+    const parseTerm = (term: string) => {
+      const match = term.match(/(spring|fall)\s+(\d{4})/i);
+      if (!match) {
+        return { season: 0, year: Number.MAX_SAFE_INTEGER };
+      }
+
+      const [, seasonName, yearString] = match;
+      const season = seasonName.toLowerCase() === 'spring' ? 0 : 1;
+      const year = parseInt(yearString, 10);
+      return { season, year };
+    };
+
+    const uniqueTerms = Array.from(
+      new Set(
+        records
+          .map((record) => record.term)
+          .filter((term): term is string => Boolean(term))
+      )
+    );
+
+    uniqueTerms.sort((a, b) => {
+      const parsedA = parseTerm(a);
+      const parsedB = parseTerm(b);
+      if (parsedA.year !== parsedB.year) {
+        return parsedA.year - parsedB.year;
+      }
+      return parsedA.season - parsedB.season;
+    });
+
+    return uniqueTerms;
+  }, [records]);
+
+  const perTermRecords = useMemo(() => {
+    const bucket: Record<string, TranscriptRecord[]> = {};
+    termOrder.forEach((term) => {
+      bucket[term] = [];
+    });
+
+    records.forEach((record) => {
+      if (!record.term) return;
+      if (!bucket[record.term]) {
+        bucket[record.term] = [];
+      }
+      bucket[record.term].push(record);
+    });
+
+    return bucket;
+  }, [records, termOrder]);
+
+  const sgpaByTerm = useMemo(() => {
+    const map: Record<string, number> = {};
+    termOrder.forEach((term) => {
+      const recs = perTermRecords[term] ?? [];
+      const credits = recs.reduce((sum, item) => sum + item.creditHours, 0);
+      const qualityPoints = recs.reduce((sum, item) => sum + item.gradePoints * item.creditHours, 0);
+      map[term] = credits ? qualityPoints / credits : 0;
+    });
+    return map;
+  }, [perTermRecords, termOrder]);
+
+  const cgpaByTerm = useMemo(() => {
+    const map: Record<string, number> = {};
+    let accumulatedCredits = 0;
+    let accumulatedQualityPoints = 0;
+
+    termOrder.forEach((term) => {
+      const recs = perTermRecords[term] ?? [];
+      const credits = recs.reduce((sum, item) => sum + item.creditHours, 0);
+      const qualityPoints = recs.reduce((sum, item) => sum + item.gradePoints * item.creditHours, 0);
+      accumulatedCredits += credits;
+      accumulatedQualityPoints += qualityPoints;
+      map[term] = accumulatedCredits ? accumulatedQualityPoints / accumulatedCredits : 0;
+    });
+
+    return map;
+  }, [perTermRecords, termOrder]);
+
+  const chartDataByTerm = useMemo(() => {
+    return termOrder.map((term) => {
+      const recs = perTermRecords[term] ?? [];
+      const credits = recs.reduce((sum, item) => sum + item.creditHours, 0);
+      const qualityPoints = recs.reduce((sum, item) => sum + item.gradePoints * item.creditHours, 0);
+      return {
+        term,
+        sgpa: sgpaByTerm[term] ?? 0,
+        cgpa: cgpaByTerm[term] ?? 0,
+        credits,
+        qualityPoints,
+        courses: recs.length,
+      };
+    });
+  }, [cgpaByTerm, perTermRecords, sgpaByTerm, termOrder]);
+
+  const gradeBucketsOverall = useMemo(() => {
+    const buckets: Record<'A' | 'B' | 'C' | 'D' | 'F', number> = {
+      A: 0,
+      B: 0,
+      C: 0,
+      D: 0,
+      F: 0,
+    };
+
+    records.forEach((record) => {
+      const firstLetter = record.grade?.[0]?.toUpperCase() ?? 'F';
+      if (firstLetter === 'A') buckets.A += 1;
+      else if (firstLetter === 'B') buckets.B += 1;
+      else if (firstLetter === 'C') buckets.C += 1;
+      else if (firstLetter === 'D') buckets.D += 1;
+      else buckets.F += 1;
+    });
+
+    return Object.entries(buckets).map(([grade, count]) => ({ grade, count }));
+  }, [records]);
+
   const tableColumns = useMemo(
     () => [
       {
@@ -167,6 +313,11 @@ export default function TranscriptPage() {
   );
 
   const tableColumnCount = tableColumns.length;
+  const hasChartData = chartDataByTerm.some(
+    (entry) => entry.courses > 0 || entry.credits > 0 || entry.qualityPoints > 0
+  );
+  const hasGradeDistribution = gradeBucketsOverall.some((bucket) => bucket.count > 0);
+  const qualityPointsGradientId = 'transcript-quality-points-gradient';
 
   if (!user) {
     return <p className="text-gray-300">Sign in to view transcript information.</p>;
@@ -194,6 +345,19 @@ export default function TranscriptPage() {
             cgpa: cgpa !== null ? cgpa.toFixed(2) : 'N/A',
             totalCreditHours,
             records: filteredRecords.length,
+            terms: termOrder.map((term) => ({
+              term,
+              sgpa: (sgpaByTerm[term] ?? 0).toFixed(2),
+              cgpaUntilTerm: (cgpaByTerm[term] ?? 0).toFixed(2),
+              credits: (perTermRecords[term] ?? []).reduce((sum, item) => sum + item.creditHours, 0),
+              courses: (perTermRecords[term] ?? []).map((item) => ({
+                courseCode: item.courseCode,
+                courseTitle: item.courseTitle,
+                creditHours: item.creditHours,
+                grade: item.grade,
+                gradePoints: item.gradePoints.toFixed(2),
+              })),
+            })),
           }}
           filename="official-transcript.pdf"
         />
@@ -297,6 +461,153 @@ export default function TranscriptPage() {
             </div>
           )}
         </CardContent>
+      </Card>
+
+      <Card className="border border-white/10 bg-[#090f1c] shadow-[0_20px_60px_rgba(3,7,18,0.7)]">
+        <CardHeader className="border-b border-white/5 pb-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/50">Deep Insights</p>
+              <CardTitle className="text-2xl font-semibold text-white">Analytics &amp; CGPA Trends</CardTitle>
+            </div>
+            <button
+              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={() => setAnalyticsOpen((open) => !open)}
+              disabled={!hasChartData && !hasGradeDistribution}
+            >
+              {analyticsOpen ? 'Hide' : 'Show'} Insights
+            </button>
+          </div>
+        </CardHeader>
+        {analyticsOpen ? (
+          <CardContent className="space-y-8 bg-gradient-to-b from-transparent to-white/5">
+            {hasChartData ? (
+              <>
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="space-y-4 rounded-2xl border border-white/5 bg-white/5 p-5 shadow-inner shadow-white/5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-white/50">Line View</p>
+                        <p className="text-base font-semibold text-white">SGPA &amp; CGPA trajectory</p>
+                      </div>
+                      <LineChartIcon className="h-5 w-5 text-sky-300" />
+                    </div>
+                    <ChartContainer
+                      config={{
+                        sgpa: { label: 'SGPA', color: '#34d399' },
+                        cgpa: { label: 'CGPA', color: '#60a5fa' },
+                      }}
+                    >
+                      <LineChart data={chartDataByTerm} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1f2a37" />
+                        <XAxis dataKey="term" tick={{ fill: '#cbd5f5', fontSize: 12 }} tickLine={false} axisLine={{ stroke: '#1f2a37' }} />
+                        <YAxis domain={[0, 4]} tick={{ fill: '#cbd5f5', fontSize: 12 }} tickLine={false} axisLine={{ stroke: '#1f2a37' }} />
+                        <ChartTooltip content={<ChartTooltipContent className="bg-[#0b1528]/90" />} />
+                        <ChartLegend content={<ChartLegendContent />} />
+                        <Line type="monotone" dataKey="sgpa" stroke="var(--color-sgpa)" strokeWidth={3} dot={false} />
+                        <Line type="monotone" dataKey="cgpa" stroke="var(--color-cgpa)" strokeWidth={3} strokeDasharray="6 6" dot={false} />
+                      </LineChart>
+                    </ChartContainer>
+                  </div>
+
+                  <div className="space-y-4 rounded-2xl border border-white/5 bg-white/5 p-5 shadow-inner shadow-white/5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-white/50">Bars</p>
+                        <p className="text-base font-semibold text-white">Credits earned each term</p>
+                      </div>
+                      <BarChart3 className="h-5 w-5 text-amber-300" />
+                    </div>
+                    <ChartContainer config={{ credits: { label: 'Credits', color: '#fbbf24' } }}>
+                      <BarChart data={chartDataByTerm} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1f2a37" />
+                        <XAxis dataKey="term" tick={{ fill: '#cbd5f5', fontSize: 12 }} tickLine={false} axisLine={{ stroke: '#1f2a37' }} />
+                        <YAxis tick={{ fill: '#cbd5f5', fontSize: 12 }} tickLine={false} axisLine={{ stroke: '#1f2a37' }} />
+                        <ChartTooltip content={<ChartTooltipContent className="bg-[#0b1528]/90" />} />
+                        <ChartLegend content={<ChartLegendContent />} />
+                        <Bar dataKey="credits" fill="var(--color-credits)" radius={[8, 8, 4, 4]} />
+                      </BarChart>
+                    </ChartContainer>
+                  </div>
+                </div>
+
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="space-y-4 rounded-2xl border border-white/5 bg-white/5 p-5 shadow-inner shadow-white/5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-white/50">Distribution</p>
+                        <p className="text-base font-semibold text-white">Overall grade share</p>
+                      </div>
+                      <PieChartIcon className="h-5 w-5 text-fuchsia-300" />
+                    </div>
+                    {hasGradeDistribution ? (
+                      <ChartContainer
+                        config={{
+                          A: { label: 'A', color: '#34d399' },
+                          B: { label: 'B', color: '#60a5fa' },
+                          C: { label: 'C', color: '#fbbf24' },
+                          D: { label: 'D', color: '#fb923c' },
+                          F: { label: 'F', color: '#f87171' },
+                        }}
+                      >
+                        <PieChart>
+                          <ChartTooltip content={<ChartTooltipContent className="bg-[#0b1528]/90" />} />
+                          <Pie data={gradeBucketsOverall} dataKey="count" nameKey="grade" outerRadius={90} innerRadius={55} stroke="#090f1c">
+                            {gradeBucketsOverall.map((entry) => (
+                              <Cell key={entry.grade} fill={`var(--color-${entry.grade})`} />
+                            ))}
+                          </Pie>
+                          <ChartLegend content={<ChartLegendContent />} />
+                        </PieChart>
+                      </ChartContainer>
+                    ) : (
+                      <p className="rounded-xl border border-white/10 bg-white/5 px-4 py-6 text-sm text-white/70">
+                        No graded courses yet to build a distribution.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-4 rounded-2xl border border-white/5 bg-white/5 p-5 shadow-inner shadow-white/5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-white/50">Momentum</p>
+                        <p className="text-base font-semibold text-white">Quality points trend</p>
+                      </div>
+                      <Sigma className="h-5 w-5 text-emerald-300" />
+                    </div>
+                    <ChartContainer config={{ qualityPoints: { label: 'Quality Points', color: '#34d399' } }}>
+                      <AreaChart data={chartDataByTerm} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1f2a37" />
+                        <XAxis dataKey="term" tick={{ fill: '#cbd5f5', fontSize: 12 }} tickLine={false} axisLine={{ stroke: '#1f2a37' }} />
+                        <YAxis tick={{ fill: '#cbd5f5', fontSize: 12 }} tickLine={false} axisLine={{ stroke: '#1f2a37' }} />
+                        <ChartTooltip content={<ChartTooltipContent className="bg-[#0b1528]/90" />} />
+                        <ChartLegend content={<ChartLegendContent />} />
+                        <defs>
+                          <linearGradient id={qualityPointsGradientId} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#34d399" stopOpacity={0.6} />
+                            <stop offset="95%" stopColor="#34d399" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <Area
+                          type="monotone"
+                          dataKey="qualityPoints"
+                          stroke="var(--color-qualityPoints)"
+                          strokeWidth={2}
+                          fill={`url(#${qualityPointsGradientId})`}
+                          fillOpacity={1}
+                        />
+                      </AreaChart>
+                    </ChartContainer>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="rounded-2xl border border-white/10 bg-white/5 px-4 py-6 text-sm text-white/70">
+                Insufficient transcript activity to generate insights yet. Complete a few courses and check back here.
+              </p>
+            )}
+          </CardContent>
+        ) : null}
       </Card>
 
       <Card className="bg-gray-800 border-gray-700">
