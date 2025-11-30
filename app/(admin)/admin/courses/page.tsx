@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { BookMarked, GraduationCap, ListChecks, RefreshCcw, Users } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -68,6 +68,22 @@ export default function AdminCoursesPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
 
+  const fetchCoursesData = useCallback(
+    async ({ signal }: { signal?: AbortSignal } = {}) => {
+      const response = await fetch("/api/admin/courses?limit=100", {
+        signal,
+        credentials: "include",
+        cache: "no-store",
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result?.message ?? "Unable to load courses");
+      }
+      return result as CoursesPayload;
+    },
+    []
+  );
+
   useEffect(() => {
     const controller = new AbortController();
     let mounted = true;
@@ -76,13 +92,7 @@ export default function AdminCoursesPage() {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch("/api/admin/courses?limit=100", {
-          signal: controller.signal,
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(result?.message ?? "Unable to load courses");
-        }
+        const result = await fetchCoursesData({ signal: controller.signal });
         if (mounted) {
           setPayload(result);
         }
@@ -106,7 +116,7 @@ export default function AdminCoursesPage() {
       mounted = false;
       controller.abort();
     };
-  }, []);
+  }, [fetchCoursesData]);
 
   const refreshCourses = async () => {
     if (isRefreshing) {
@@ -114,11 +124,7 @@ export default function AdminCoursesPage() {
     }
     try {
       setIsRefreshing(true);
-      const response = await fetch("/api/admin/courses?limit=100");
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(result?.message ?? "Unable to refresh courses");
-      }
+      const result = await fetchCoursesData();
       setPayload(result);
       toast({
         title: "Course list updated",
@@ -191,6 +197,7 @@ export default function AdminCoursesPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: !course.isActive }),
+        credentials: "include",
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result?.course) {
@@ -226,19 +233,14 @@ export default function AdminCoursesPage() {
       setDeletingCourseId(course.id);
       const response = await fetch(`/api/admin/courses/${course.id}`, {
         method: "DELETE",
+        credentials: "include",
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(result?.message ?? "Unable to delete course");
       }
-      setPayload((prev) =>
-        prev
-          ? {
-              ...prev,
-              courses: prev.courses.filter((item) => item.id !== course.id),
-            }
-          : prev
-      );
+      const refreshed = await fetchCoursesData();
+      setPayload(refreshed);
       toast({
         title: "Course deleted",
         description: `${course.code} removed from catalog.`,
@@ -291,29 +293,14 @@ export default function AdminCoursesPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: draft }),
+        credentials: "include",
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result?.section) {
         throw new Error(result?.message ?? "Unable to add section");
       }
-      const newSection: CourseSectionRecord = result.section;
-      setPayload((prev) =>
-        prev
-          ? {
-              ...prev,
-              courses: prev.courses.map((item) =>
-                item.id === course.id
-                  ? {
-                      ...item,
-                      sections: [...item.sections, newSection].sort((a, b) =>
-                        a.name.localeCompare(b.name)
-                      ),
-                    }
-                  : item
-              ),
-            }
-          : prev
-      );
+      const refreshed = await fetchCoursesData();
+      setPayload(refreshed);
       setSectionDrafts((prev) => ({ ...prev, [course.id]: "" }));
       toast({
         title: "Section added",
@@ -344,29 +331,15 @@ export default function AdminCoursesPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ instructorId }),
+        credentials: "include",
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result?.section) {
         throw new Error(result?.message ?? "Unable to update section");
       }
       const updatedSection: CourseSectionRecord = result.section;
-      setPayload((prev) =>
-        prev
-          ? {
-              ...prev,
-              courses: prev.courses.map((item) =>
-                item.id === course.id
-                  ? {
-                      ...item,
-                      sections: item.sections
-                        .map((entry) => (entry.id === section.id ? updatedSection : entry))
-                        .sort((a, b) => a.name.localeCompare(b.name)),
-                    }
-                  : item
-              ),
-            }
-          : prev
-      );
+      const refreshed = await fetchCoursesData();
+      setPayload(refreshed);
       toast({
         title: "Section updated",
         description: updatedSection.instructor
@@ -398,26 +371,14 @@ export default function AdminCoursesPage() {
       setRemovingSectionId(section.id);
       const response = await fetch(`/api/admin/courses/${course.id}/sections/${section.id}`, {
         method: "DELETE",
+        credentials: "include",
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(result?.message ?? "Unable to remove section");
       }
-      setPayload((prev) =>
-        prev
-          ? {
-              ...prev,
-              courses: prev.courses.map((item) =>
-                item.id === course.id
-                  ? {
-                      ...item,
-                      sections: item.sections.filter((entry) => entry.id !== section.id),
-                    }
-                  : item
-              ),
-            }
-          : prev
-      );
+      const refreshed = await fetchCoursesData();
+      setPayload(refreshed);
       toast({
         title: "Section removed",
         description: `${section.name} detached from ${course.code}.`,

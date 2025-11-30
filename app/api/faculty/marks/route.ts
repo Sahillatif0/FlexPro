@@ -83,6 +83,18 @@ export async function GET(request: Request) {
       studentMark: any;
     }>;
 
+    // load any existing final transcripts for this course+term so we can mark finalized students
+    const transcripts = await prisma.transcript.findMany({
+      where: {
+        courseId,
+        termId,
+        status: 'final',
+      },
+      select: { userId: true },
+    });
+
+    const finalizedSet = new Set(transcripts.map((t) => t.userId));
+
     const records = enrollments
       .filter((enrollment) => {
         const normalizedStudentSection = (enrollment.user?.section ?? "").trim().toLowerCase();
@@ -107,6 +119,7 @@ export async function GET(request: Request) {
       .map((enrollment) => ({
         userId: enrollment.userId,
         studentMark: enrollment.studentMark,
+        finalized: finalizedSet.has(enrollment.userId),
       }));
 
     return NextResponse.json({ records });

@@ -56,6 +56,7 @@ interface StudentMark {
 interface MarkRecord {
   userId: string;
   studentMark: StudentMark | null;
+  finalized?: boolean;
 }
 
 const MAX_MARKS = {
@@ -106,8 +107,11 @@ export default function FacultyMarksPage() {
   const [selectedTermId, setSelectedTermId] = useState<string>("");
   const [selectedSectionId, setSelectedSectionId] = useState<string>("ALL");
   const [marksEntries, setMarksEntries] = useState<Record<string, StudentMark>>({});
+  const [finalizedMap, setFinalizedMap] = useState<Record<string, boolean>>({});
   const [isLoadingMarks, setIsLoadingMarks] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(true);
+  const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [graceMarksInput, setGraceMarksInput] = useState<string>("");
   const [isCompactViewport, setIsCompactViewport] = useState<boolean>(false);
@@ -287,14 +291,18 @@ export default function FacultyMarksPage() {
         const payload: { records: MarkRecord[] } = await response.json();
         if (!cancelled) {
           const nextEntries: Record<string, StudentMark> = {};
+          const nextFinalized: Record<string, boolean> = {};
           payload.records.forEach((record) => {
             if (record.studentMark) {
               nextEntries[record.userId] = record.studentMark;
+              nextFinalized[record.userId] = !!record.finalized;
             } else {
               nextEntries[record.userId] = createEmptyMark();
+              nextFinalized[record.userId] = !!record.finalized;
             }
           });
           setMarksEntries(nextEntries);
+          setFinalizedMap(nextFinalized);
         }
       } catch (err: any) {
         if (err?.name === "AbortError") {
@@ -446,6 +454,56 @@ export default function FacultyMarksPage() {
       });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleFinalize = async () => {
+    if (!selectedCourseId || !selectedTermId) return;
+    if (!confirm(`Finalize grades for ${activeCourse?.code} · ${activeCourse?.title}? This will create final transcript entries and mark enrollments completed.`)) {
+      return;
+    }
+
+    try {
+      setIsFinalizing(true);
+      const sectionPayload = selectedSectionId && selectedSectionId !== "ALL" ? selectedSectionId : undefined;
+      const response = await fetch('/api/faculty/marks/finalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId: selectedCourseId, termId: selectedTermId, sectionId: sectionPayload }),
+        credentials: 'include',
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.message ?? 'Failed to finalize grades');
+
+      toast({ title: 'Grades finalized', description: payload?.message ?? 'Final transcripts created.' });
+      // reload marks to pick up finalized state
+      setTimeout(() => {
+        // simple reload via re-fetch
+        setIsLoadingMarks(true);
+        const params = new URLSearchParams({ courseId: selectedCourseId, termId: selectedTermId });
+        if (selectedSectionId && selectedSectionId !== 'ALL') params.set('sectionId', selectedSectionId);
+        fetch(`/api/faculty/marks?${params.toString()}`, { credentials: 'include' }).then(async (res) => {
+          const data = await res.json().catch(() => ({ records: [] }));
+          const nextEntries: Record<string, StudentMark> = {};
+          const nextFinalized: Record<string, boolean> = {};
+          data.records.forEach((record: any) => {
+            if (record.studentMark) {
+              nextEntries[record.userId] = record.studentMark;
+            } else {
+              nextEntries[record.userId] = createEmptyMark();
+            }
+            nextFinalized[record.userId] = !!record.finalized;
+          });
+          setMarksEntries(nextEntries);
+          setFinalizedMap(nextFinalized);
+          setIsLoadingMarks(false);
+        }).catch(() => setIsLoadingMarks(false));
+      }, 250);
+    } catch (err: any) {
+      toast({ title: 'Unable to finalize grades', description: err?.message ?? 'Unexpected error', variant: 'destructive' });
+    } finally {
+      setIsFinalizing(false);
+      setFinalizeDialogOpen(false);
     }
   };
 
@@ -645,8 +703,9 @@ export default function FacultyMarksPage() {
             </div>
           ) : isCompactViewport ? (
             <div className="space-y-4 p-4">
-              {allStudents.map((student) => {
+                {allStudents.map((student) => {
                 const entry = marksEntries[student.userId] ?? createEmptyMark();
+                  const isFinal = !!finalizedMap[student.userId];
                 return (
                   <div
                     key={student.userId}
@@ -671,14 +730,17 @@ export default function FacultyMarksPage() {
                             max={field.max}
                             value={entry[field.key] ?? 0}
                             onChange={(e) => updateMark(student.userId, field.key, e.target.value)}
-                            disabled={isSaving}
+                            disabled={isSaving || isFinal}
                             className="h-9 w-full border-gray-700 bg-gray-800 text-center text-sm text-white focus-visible:ring-1 focus-visible:ring-emerald-500"
                           />
                         </div>
                       ))}
                     </div>
-                    <div className="pt-3 text-right text-sm font-semibold text-emerald-300">
-                      Total {entry.total.toFixed(2)}
+                    <div className="pt-3 flex items-center justify-between">
+                      <div className="text-sm font-semibold text-emerald-300">Total {entry.total.toFixed(2)}</div>
+                      {isFinal ? (
+                        <Badge className="border-amber-500/40 bg-amber-500/10 text-amber-100">Finalized</Badge>
+                      ) : null}
                     </div>
                   </div>
                 );
@@ -705,6 +767,7 @@ export default function FacultyMarksPage() {
                 <TableBody>
                   {allStudents.map((student, index) => {
                     const entry = marksEntries[student.userId] ?? createEmptyMark();
+                    const isFinal = !!finalizedMap[student.userId];
                     const isEven = index % 2 === 0;
                     return (
                       <TableRow
@@ -730,13 +793,16 @@ export default function FacultyMarksPage() {
                               max={field.max}
                               value={entry[field.key] ?? 0}
                               onChange={(e) => updateMark(student.userId, field.key, e.target.value)}
-                              disabled={isSaving}
+                              disabled={isSaving || isFinal}
                               className="h-9 w-full border-gray-700 bg-gray-800 text-center text-sm text-white focus-visible:ring-1 focus-visible:ring-emerald-500"
                             />
                           </TableCell>
                         ))}
                         <TableCell className="text-center text-sm font-semibold text-emerald-300">
-                          {entry.total.toFixed(2)}
+                          <div className="flex items-center justify-center gap-2">
+                            <span>{entry.total.toFixed(2)}</span>
+                            {isFinal ? <Badge className="border-amber-500/40 bg-amber-500/10 text-amber-100">Finalized</Badge> : null}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -755,6 +821,13 @@ export default function FacultyMarksPage() {
           className="w-full bg-emerald-600 text-white hover:bg-emerald-700 sm:w-auto"
         >
           {isSaving ? "Saving..." : "Save Marks"}
+        </Button>
+        <Button
+          onClick={handleFinalize}
+          disabled={isFinalizing || isSaving || isLoadingMarks || !activeTerm || allStudents.length === 0}
+          className="w-full bg-amber-600 text-white hover:bg-amber-700 sm:w-auto"
+        >
+          {isFinalizing ? 'Finalizing...' : 'Finalize Grades'}
         </Button>
       </div>
     </div>
