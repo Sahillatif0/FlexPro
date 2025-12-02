@@ -6,9 +6,15 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
+type NoteParams = { id: string };
+
+function resolveParams<T>(params: T | Promise<T>): Promise<T> {
+  return Promise.resolve(params);
+}
+
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: NoteParams | Promise<NoteParams> }
 ) {
   try {
     const sessionUser = await getSessionFromRequest(request);
@@ -21,7 +27,7 @@ export async function PUT(
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
-    const noteId = params.id;
+    const { id: noteId } = await resolveParams(context.params);
     if (!noteId) {
       return NextResponse.json({ message: "Note id is required" }, { status: 400 });
     }

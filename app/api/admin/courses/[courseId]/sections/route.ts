@@ -6,14 +6,23 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
-export async function POST(request: Request, { params }: { params: { courseId: string } }) {
+type CourseParams = { courseId: string };
+
+function resolveParams<T>(params: T | Promise<T>): Promise<T> {
+  return Promise.resolve(params);
+}
+
+export async function POST(
+  request: Request,
+  context: { params: CourseParams | Promise<CourseParams> }
+) {
   try {
     const session = await requireAdmin(request);
     if (session.status !== 200) {
       return NextResponse.json({ message: session.message }, { status: session.status });
     }
 
-    const { courseId } = params;
+    const { courseId } = await resolveParams(context.params);
     if (!courseId) {
       return NextResponse.json({ message: "Course id is required" }, { status: 400 });
     }

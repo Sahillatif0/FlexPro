@@ -6,14 +6,23 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
-export async function PATCH(request: Request, { params }: { params: { courseId: string; sectionId: string } }) {
+type CourseSectionParams = { courseId: string; sectionId: string };
+
+function resolveParams<T>(params: T | Promise<T>): Promise<T> {
+  return Promise.resolve(params);
+}
+
+export async function PATCH(
+  request: Request,
+  context: { params: CourseSectionParams | Promise<CourseSectionParams> }
+) {
   try {
     const session = await requireAdmin(request);
     if (session.status !== 200) {
       return NextResponse.json({ message: session.message }, { status: session.status });
     }
 
-    const { courseId, sectionId } = params;
+    const { courseId, sectionId } = await resolveParams(context.params);
     if (!courseId || !sectionId) {
       return NextResponse.json({ message: "Course id and section id are required" }, { status: 400 });
     }
@@ -120,7 +129,7 @@ export async function PATCH(request: Request, { params }: { params: { courseId: 
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { courseId: string; sectionId: string } }
+  context: { params: CourseSectionParams | Promise<CourseSectionParams> }
 ) {
   try {
     const session = await requireAdmin(request);
@@ -128,7 +137,7 @@ export async function DELETE(
       return NextResponse.json({ message: session.message }, { status: session.status });
     }
 
-    const { courseId, sectionId } = params;
+    const { courseId, sectionId } = await resolveParams(context.params);
     if (!courseId || !sectionId) {
       return NextResponse.json({ message: "Course id and section id are required" }, { status: 400 });
     }

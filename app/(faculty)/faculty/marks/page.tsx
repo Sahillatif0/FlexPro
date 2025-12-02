@@ -99,6 +99,32 @@ const createEmptyMark = (): StudentMark => ({
   total: 0,
 });
 
+const MAX_TOTAL = 100;
+
+const calculateBaseTotal = (mark: StudentMark) =>
+  mark.assignment1 +
+  mark.assignment2 +
+  mark.quiz1 +
+  mark.quiz2 +
+  mark.quiz3 +
+  mark.quiz4 +
+  mark.mid1 +
+  mark.mid2 +
+  mark.finalExam;
+
+const normalizeStudentMark = (mark: StudentMark): StudentMark => {
+  const baseTotal = calculateBaseTotal(mark);
+  const graceLimit = Math.min(MAX_MARKS.graceMarks, Math.max(0, MAX_TOTAL - baseTotal));
+  const safeGrace = Math.min(Math.max(mark.graceMarks, 0), graceLimit);
+  const roundedGrace = Number(safeGrace.toFixed(2));
+  const total = Math.min(baseTotal + roundedGrace, MAX_TOTAL);
+  return {
+    ...mark,
+    graceMarks: roundedGrace,
+    total: Number(total.toFixed(2)),
+  };
+};
+
 export default function FacultyMarksPage() {
   const { toast } = useToast();
   const [courses, setCourses] = useState<TeachingCourse[]>([]);
@@ -110,8 +136,8 @@ export default function FacultyMarksPage() {
   const [finalizedMap, setFinalizedMap] = useState<Record<string, boolean>>({});
   const [isLoadingMarks, setIsLoadingMarks] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isFinalizing, setIsFinalizing] = useState(true);
-  const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
+  const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [graceMarksInput, setGraceMarksInput] = useState<string>("");
   const [isCompactViewport, setIsCompactViewport] = useState<boolean>(false);
@@ -294,7 +320,7 @@ export default function FacultyMarksPage() {
           const nextFinalized: Record<string, boolean> = {};
           payload.records.forEach((record) => {
             if (record.studentMark) {
-              nextEntries[record.userId] = record.studentMark;
+              nextEntries[record.userId] = normalizeStudentMark(record.studentMark);
               nextFinalized[record.userId] = !!record.finalized;
             } else {
               nextEntries[record.userId] = createEmptyMark();
@@ -344,23 +370,32 @@ export default function FacultyMarksPage() {
 
     if (safeValue < 0) safeValue = 0;
 
+    let graceLimited = false;
+    let graceLimitValue = 0;
+
     setMarksEntries((prev) => {
       const current = prev[userId] ?? createEmptyMark();
 
-      const updated = { ...current, [field]: safeValue };
+      const candidate = { ...current, [field]: safeValue };
+      const normalized = normalizeStudentMark(candidate);
 
-      // Recalculate total
-      updated.total =
-        updated.assignment1 + updated.assignment2 +
-        updated.quiz1 + updated.quiz2 + updated.quiz3 + updated.quiz4 +
-        updated.mid1 + updated.mid2 +
-        updated.finalExam + updated.graceMarks;
+      if (field === "graceMarks" && Math.abs(normalized.graceMarks - candidate.graceMarks) > 1e-6) {
+        graceLimited = true;
+        graceLimitValue = normalized.graceMarks;
+      }
 
       return {
         ...prev,
-        [userId]: updated,
+        [userId]: normalized,
       };
     });
+
+    if (graceLimited) {
+      toast({
+        title: "Grace marks adjusted",
+        description: `Maximum grace allowed for this student is ${graceLimitValue.toFixed(2)} to keep the total within ${MAX_TOTAL}.`,
+      });
+    }
   };
 
   const applyGraceMarksToAll = () => {
@@ -385,24 +420,28 @@ export default function FacultyMarksPage() {
       return;
     }
 
+    let limitedCount = 0;
+
     setMarksEntries((prev) => {
       const next = { ...prev };
       allStudents.forEach((student) => {
         const current = next[student.userId] ?? createEmptyMark();
-        const updated = { ...current, graceMarks: value };
-        updated.total =
-          updated.assignment1 + updated.assignment2 +
-          updated.quiz1 + updated.quiz2 + updated.quiz3 + updated.quiz4 +
-          updated.mid1 + updated.mid2 +
-          updated.finalExam + updated.graceMarks;
-        next[student.userId] = updated;
+        const candidate = { ...current, graceMarks: value };
+        const normalized = normalizeStudentMark(candidate);
+        if (Math.abs(normalized.graceMarks - value) > 1e-6) {
+          limitedCount += 1;
+        }
+        next[student.userId] = normalized;
       });
       return next;
     });
 
     toast({
       title: "Grace Marks Applied",
-      description: `Applied ${value} grace marks to all students.`,
+      description:
+        limitedCount > 0
+          ? `Applied grace marks to all students. ${limitedCount} ${limitedCount === 1 ? "student was" : "students were"} capped to stay within ${MAX_TOTAL}.`
+          : `Applied ${value} grace marks to all students.`,
     });
   };
 
@@ -488,7 +527,7 @@ export default function FacultyMarksPage() {
           const nextFinalized: Record<string, boolean> = {};
           data.records.forEach((record: any) => {
             if (record.studentMark) {
-              nextEntries[record.userId] = record.studentMark;
+              nextEntries[record.userId] = normalizeStudentMark(record.studentMark);
             } else {
               nextEntries[record.userId] = createEmptyMark();
             }
